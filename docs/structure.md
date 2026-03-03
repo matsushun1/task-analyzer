@@ -10,101 +10,32 @@
 ```
 task-analyzer/
 ├── docs/                               # 📚 ドキュメント
-│   ├── architecture.md                 # アーキテクチャ設計
-│   ├── functional-requirements.md      # 機能要件定義
-│   ├── implementation-requirements.md  # 実装要件定義
-│   └── structure.md                    # 本ファイル（ディレクトリ構成）
 │
 ├── src/                                # 💻 ソースコード
 │   ├── controllers/                    # 【Controller層】HTTPリクエスト処理
-│   │   └── reportController.ts         # レポート生成エンドポイント、フロー制御
 │   │
 │   ├── models/                         # 【Model層】データモデル、ビジネスロジック
 │   │   ├── types/                      # 型定義
-│   │   │   ├── index.ts                # 型定義エクスポート
-│   │   │   ├── notion.types.ts         # NotionTask, NotionDailyNote
-│   │   │   ├── task.types.ts           # TaskData
-│   │   │   ├── dailyNote.types.ts      # DailyNoteData
-│   │   │   └── analysis.types.ts       # ClaudeAnalysisResult
-│   │   │
-│   │   ├── parsers/                    # ブロック解析ロジック
-│   │   │   ├── deadlineParser.ts       # 期限パース（MM/DD → Date）
-│   │   │   ├── workloadParser.ts       # 工数抽出（（3H）→ 3）
-│   │   │   └── sectionParser.ts        # セクション分割（【今日行ったこと】等）
-│   │   │
-│   │   ├── task.model.ts               # TaskData変換、ブロック取得・解析
-│   │   ├── dailyNote.model.ts          # DailyNoteData変換、ブロック取得・解析
-│   │   └── analysis.model.ts           # Claude分析結果の検証、型ガード
+│   │   └── parsers/                    # ブロック解析ロジック
 │   │
 │   ├── views/                          # 【View層】Notionページ生成
 │   │   ├── blocks/                     # Notionブロック生成ヘルパー
-│   │   │   ├── index.ts                # ブロック生成関数エクスポート
-│   │   │   ├── headings.ts             # heading_1, heading_2
-│   │   │   ├── lists.ts                # numbered_list_item, bulleted_list_item
-│   │   │   ├── dividers.ts             # divider
-│   │   │   └── paragraphs.ts           # paragraph
-│   │   │
-│   │   ├── types/
-│   │   │   └── notionBlock.types.ts    # Notionブロック型定義
-│   │   │
-│   │   └── reportView.ts               # Notionレポートページ全体の生成
+│   │   └── types/                      # Notionブロック型定義
 │   │
 │   ├── services/                       # 【Services層】外部API通信
-│   │   ├── notionService.ts            # Notion API操作（ブロック取得、追加）
-│   │   ├── claudeService.ts            # Claude API呼び出し
-│   │   └── authService.ts              # 認証チェック（SECRET_TOKEN検証）
-│   │
 │   ├── middleware/                     # ミドルウェア
-│   │   ├── errorHandler.ts             # グローバルエラーハンドリング
-│   │   └── asyncHandler.ts             # 非同期処理ラッパー
-│   │
 │   ├── utils/                          # ユーティリティ
-│   │   ├── logger.ts                   # [INFO]/[WARN]/[ERROR]ログ出力
-│   │   ├── errors.ts                   # カスタムエラークラス
-│   │   ├── retryHelper.ts              # リトライロジック（exponential backoff）
-│   │   └── validators.ts               # リクエストバリデーション
-│   │
-│   ├── config/                         # 設定
-│   │   └── environment.ts              # 環境変数取得・検証
-│   │
-│   └── index.ts                        # エントリーポイント（Cloud Run起動）
+│   └── config/                         # 設定
 │
-├── tests/                              # 🧪 テスト
-│   ├── unit/                           # ユニットテスト
-│   │   ├── models/
-│   │   │   ├── task.model.test.ts
-│   │   │   ├── dailyNote.model.test.ts
-│   │   │   └── parsers/
-│   │   │       ├── deadlineParser.test.ts
-│   │   │       ├── workloadParser.test.ts
-│   │   │       └── sectionParser.test.ts
-│   │   ├── views/
-│   │   │   └── reportView.test.ts
-│   │   ├── services/
-│   │   │   ├── notionService.test.ts
-│   │   │   ├── claudeService.test.ts
-│   │   │   └── authService.test.ts
-│   │   └── utils/
-│   │       ├── logger.test.ts
-│   │       └── retryHelper.test.ts
-│   │
-│   ├── integration/                    # 統合テスト
-│   │   └── reportGeneration.test.ts    # エンドツーエンドのレポート生成テスト
-│   │
-│   └── fixtures/                       # テストデータ
-│       ├── notionTasks.json            # サンプルNotionTask
-│       ├── notionDailyNotes.json       # サンプルNotionDailyNote
-│       └── claudeResponse.json         # サンプルClaude APIレスポンス
-│
-├── .claude/                            # Claude Code設定
-├── .git/                               # Gitリポジトリ
-├── .gitignore                          # Git除外設定
-├── CLAUDE.md                           # コードスタイルガイド
-├── package.json                        # npmパッケージ定義
-├── tsconfig.json                       # TypeScript設定
-├── .eslintrc.js                        # ESLint設定
-├── .prettierrc                         # Prettier設定
-└── README.md                           # プロジェクト説明
+└── tests/                              # 🧪 テスト
+    ├── unit/                           # ユニットテスト
+    │   ├── models/
+    │   │   └── parsers/
+    │   ├── views/
+    │   ├── services/
+    │   └── utils/
+    ├── integration/                    # 統合テスト
+    └── fixtures/                       # テストデータ
 ```
 
 ---

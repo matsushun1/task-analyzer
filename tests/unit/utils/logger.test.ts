@@ -72,7 +72,8 @@ describe('logger', () => {
       expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
       const output = consoleErrorSpy.mock.calls[0][0];
       expect(output).toContain('Error without details');
-      expect(output).not.toContain(':');
+      // エラー詳細（": <detail>"形式）が付加されていないことを確認
+      expect(output).not.toMatch(/Error without details:.+/);
     });
 
     it('文字列型のエラーを処理する', () => {

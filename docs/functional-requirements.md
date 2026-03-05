@@ -106,12 +106,19 @@ Notionボタン → Make.com → Cloud Run (TypeScript) → Claude API
 タスクページの本文には以下の形式で情報を記載：
 
 ```
-• [サブタスク名]
+[] [サブタスク名]
   • 期限：2/20
-  • 詳細
+  • 詳細（toggle形式）
     • [詳細内容1]
     • [詳細内容2]
 ```
+
+**ブロック仕様:**
+- **ルート階層のブロック**: typeは `to_do`
+  - `to_do.checked = true` のブロックは完了済みとみなし、分析対象から除外する
+- **期限ブロック**: typeは `bulleted_list_item`
+- **詳細ブロック**: typeは `toggle` または `bulleted_list_item`
+- **無視するブロック**: typeが `code`, `image`, `video`, `file`, `audio` のブロックはスキップする
 
 **抽出対象:**
 - **期限**: `期限：MM/DD` または `期限：〇月下旬` 形式

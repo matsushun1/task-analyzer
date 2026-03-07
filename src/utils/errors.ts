@@ -3,15 +3,15 @@ export class AppError extends Error {
     message: string,
     public readonly statusCode: number
   ) {
-    super(message);
-    this.name = this.constructor.name;
-    Error.captureStackTrace(this, this.constructor);
+    super(message)
+    this.name = this.constructor.name
+    Error.captureStackTrace(this, this.constructor)
   }
 }
 
 export class AuthenticationError extends AppError {
   constructor(message = 'Unauthorized') {
-    super(message, 401);
+    super(message, 401)
   }
 }
 
@@ -20,7 +20,7 @@ export class NotionAPIError extends AppError {
     message: string,
     public readonly originalError?: unknown
   ) {
-    super(message, 500);
+    super(message, 500)
   }
 }
 
@@ -29,7 +29,7 @@ export class BlockFetchError extends NotionAPIError {
     public readonly pageId: string,
     originalError?: unknown
   ) {
-    super(`Failed to fetch blocks for page: ${pageId}`, originalError);
+    super(`Failed to fetch blocks for page: ${pageId}`, originalError)
   }
 }
 
@@ -38,6 +38,6 @@ export class ClaudeAPIError extends AppError {
     message: string,
     public readonly originalError?: unknown
   ) {
-    super(message, 500);
+    super(message, 500)
   }
 }

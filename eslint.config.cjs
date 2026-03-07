@@ -9,6 +9,8 @@ module.exports = tseslint.config(
   prettierConfig,
   {
     rules: {
+      // 文末セミコロン禁止
+      semi: ['error', 'never'],
       // any型禁止
       '@typescript-eslint/no-explicit-any': 'error',
       // default export禁止

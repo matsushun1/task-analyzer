@@ -24,10 +24,7 @@ export const fetchTasks = async (databaseId: string, notionToken: string): Promi
   }
 }
 
-export const fetchBlockChildren = async (
-  pageId: string,
-  notionToken: string
-): Promise<BlockObjectResponse[]> => {
+export const fetchBlockChildren = async (pageId: string, notionToken: string): Promise<BlockObjectResponse[]> => {
   const client = new Client({ auth: notionToken })
   try {
     const response = await client.blocks.children.list({ block_id: pageId })

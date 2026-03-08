@@ -1,6 +1,6 @@
 import { Client } from '@notionhq/client'
 import type { BlockObjectResponse } from '@notionhq/client/build/src/api-endpoints'
-import { fetchTasks, fetchBlockChildren, processReport } from '../../../src/services/notionService'
+import { fetchTasks, fetchBlockChildren, processReport, type BlockWithChildren } from '../../../src/services/notionService'
 import { NotionAPIError, BlockFetchError } from '../../../src/utils/errors'
 
 jest.mock('@notionhq/client')
@@ -80,6 +80,7 @@ describe('notionService', () => {
       const paragraphBlock = {
         id: 'block-1',
         type: 'paragraph',
+        has_children: false,
         paragraph: { rich_text: [{ plain_text: 'テスト' }] },
       }
       mockListBlockChildren.mockResolvedValue({ results: [paragraphBlock] })
@@ -88,7 +89,58 @@ describe('notionService', () => {
 
       expect(mockListBlockChildren).toHaveBeenCalledWith({ block_id: 'page-id-1' })
       expect(result).toHaveLength(1)
-      expect(result[0]).toEqual(paragraphBlock)
+      expect(result[0]).toMatchObject(paragraphBlock)
+    })
+
+    it('has_children: true のブロックの子ブロックを再帰的に取得する', async () => {
+      const childBlock = { id: 'child-1', type: 'bulleted_list_item', has_children: false }
+      const parentBlock = { id: 'parent-1', type: 'to_do', has_children: true }
+
+      mockListBlockChildren
+        .mockResolvedValueOnce({ results: [parentBlock] })
+        .mockResolvedValueOnce({ results: [childBlock] })
+
+      const result = await fetchBlockChildren('page-id-1', 'notion-token')
+
+      expect(mockListBlockChildren).toHaveBeenCalledTimes(2)
+      expect(mockListBlockChildren).toHaveBeenNthCalledWith(2, { block_id: 'parent-1' })
+      expect(result[0]).toMatchObject({ ...parentBlock, children: [expect.objectContaining(childBlock)] })
+    })
+
+    it('has_children: false のブロックは子を取得しない', async () => {
+      const leafBlock = { id: 'leaf-1', type: 'paragraph', has_children: false }
+      mockListBlockChildren.mockResolvedValue({ results: [leafBlock] })
+
+      await fetchBlockChildren('page-id-1', 'notion-token')
+
+      expect(mockListBlockChildren).toHaveBeenCalledTimes(1)
+    })
+
+    it('深さ2以上の入れ子を再帰的に取得する', async () => {
+      const grandChildBlock = { id: 'grand-child-1', type: 'bulleted_list_item', has_children: false }
+      const childBlock = { id: 'child-1', type: 'toggle', has_children: true }
+      const parentBlock = { id: 'parent-1', type: 'to_do', has_children: true }
+
+      mockListBlockChildren
+        .mockResolvedValueOnce({ results: [parentBlock] })
+        .mockResolvedValueOnce({ results: [childBlock] })
+        .mockResolvedValueOnce({ results: [grandChildBlock] })
+
+      const result = await fetchBlockChildren('page-id-1', 'notion-token')
+
+      expect(mockListBlockChildren).toHaveBeenCalledTimes(3)
+      const child = result[0].children[0]
+      expect(child).toMatchObject({ ...childBlock, children: [expect.objectContaining(grandChildBlock)] })
+    })
+
+    it('除外ブロックの子は取得しない', async () => {
+      const codeBlock = { id: 'code-1', type: 'code', has_children: true }
+      mockListBlockChildren.mockResolvedValue({ results: [codeBlock] })
+
+      const result = await fetchBlockChildren('page-id-1', 'notion-token')
+
+      expect(mockListBlockChildren).toHaveBeenCalledTimes(1)
+      expect(result).toHaveLength(0)
     })
 
     it('typeがcodeのブロックを除外する', async () => {

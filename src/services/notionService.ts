@@ -8,6 +8,8 @@ const EXCLUDED_BLOCK_TYPES = new Set(['code', 'image', 'video', 'file', 'audio']
 const isBlockObjectResponse = (block: unknown): block is BlockObjectResponse =>
   typeof block === 'object' && block !== null && 'type' in block
 
+export type BlockWithChildren = BlockObjectResponse & { children: BlockWithChildren[] }
+
 export const fetchTasks = async (databaseId: string, notionToken: string): Promise<NotionTask[]> => {
   const client = new Client({ auth: notionToken })
   try {
@@ -24,13 +26,22 @@ export const fetchTasks = async (databaseId: string, notionToken: string): Promi
   }
 }
 
-export const fetchBlockChildren = async (pageId: string, notionToken: string): Promise<BlockObjectResponse[]> => {
+const fetchChildrenRecursively = async (client: Client, blockId: string): Promise<BlockWithChildren[]> => {
+  const response = await client.blocks.children.list({ block_id: blockId })
+  const blocks = response.results.filter(isBlockObjectResponse).filter((block) => !EXCLUDED_BLOCK_TYPES.has(block.type))
+
+  return Promise.all(
+    blocks.map(async (block) => {
+      const children = block.has_children ? await fetchChildrenRecursively(client, block.id) : []
+      return { ...block, children }
+    })
+  )
+}
+
+export const fetchBlockChildren = async (pageId: string, notionToken: string): Promise<BlockWithChildren[]> => {
   const client = new Client({ auth: notionToken })
   try {
-    const response = await client.blocks.children.list({ block_id: pageId })
-    return response.results
-      .filter(isBlockObjectResponse)
-      .filter((block) => !EXCLUDED_BLOCK_TYPES.has(block.type))
+    return await fetchChildrenRecursively(client, pageId)
   } catch (error) {
     throw new BlockFetchError(pageId, error)
   }

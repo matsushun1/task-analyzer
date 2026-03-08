@@ -1,4 +1,8 @@
 // 環境変数を設定（テスト用）
+process.env.SECRET_TOKEN = 'test-secret'
+process.env.MASTER_PW = 'test-master-pw'
+process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
+process.env.NOTION_TOKEN = 'test-notion-token'
 process.env.CRYPTO_ALGORITHM = 'aes-256-gcm'
 process.env.CRYPTO_IV_LENGTH = '16'
 process.env.CRYPTO_SALT_LENGTH = '64'
@@ -49,6 +53,23 @@ describe('cryptoApiKey', () => {
       const invalidData = 'invalid-base64-data'
 
       expect(() => decrypt(invalidData, masterPassword)).toThrow()
+    })
+
+    it('暗号文が1バイト改ざんされた場合はGCM認証エラーでthrowする', () => {
+      const encrypted = encrypt(testApiKey, masterPassword)
+      const buffer = Buffer.from(encrypted, 'base64')
+      // 暗号文部分（salt+iv+tag = 64+16+16 = 96バイト以降）の最後のバイトを反転
+      buffer[buffer.length - 1] ^= 0x01
+      const tampered = buffer.toString('base64')
+
+      expect(() => decrypt(tampered, masterPassword)).toThrow()
+    })
+
+    it('バッファがヘッダサイズより短い場合はthrowする', () => {
+      // salt(64)+iv(16)+tag(16) = 96バイト未満の短いデータ
+      const tooShort = Buffer.alloc(10).toString('base64')
+
+      expect(() => decrypt(tooShort, masterPassword)).toThrow()
     })
   })
 

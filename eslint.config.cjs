@@ -25,7 +25,16 @@ module.exports = tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['*.js', '*.cjs', '*.mjs'],
+          allowDefaultProject: [
+            '*.js',
+            '*.cjs',
+            '*.mjs',
+            'tests/*.ts',
+            'tests/*/*.ts',
+            'tests/*/*/*.ts',
+            'tests/*/*/*/*.ts',
+          ],
+          defaultProject: 'tests/tsconfig.json',
         },
         tsconfigRootDir: __dirname,
       },

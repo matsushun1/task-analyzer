@@ -1,19 +1,8 @@
 import crypto from 'crypto'
-import 'dotenv/config'
+import { getEnvironment } from '../config/environment'
 
-// 暗号化アルゴリズム（環境変数から読み込み）
-const ALGORITHM = process.env.CRYPTO_ALGORITHM as string
-const IV_LENGTH = parseInt(process.env.CRYPTO_IV_LENGTH as string, 10)
-const SALT_LENGTH = parseInt(process.env.CRYPTO_SALT_LENGTH as string, 10)
-const TAG_LENGTH = parseInt(process.env.CRYPTO_TAG_LENGTH as string, 10)
-const KEY_LENGTH = parseInt(process.env.CRYPTO_KEY_LENGTH as string, 10)
-const ITERATIONS = parseInt(process.env.CRYPTO_ITERATIONS as string, 10)
-
-/**
- * パスワードから暗号化キーを導出
- */
-function deriveKey(password: string, salt: Buffer): Buffer {
-  return crypto.pbkdf2Sync(password, salt, ITERATIONS, KEY_LENGTH, 'sha512')
+function deriveKey(password: string, salt: Buffer, keyLength: number, iterations: number): Buffer {
+  return crypto.pbkdf2Sync(password, salt, iterations, keyLength, 'sha512')
 }
 
 /**
@@ -23,28 +12,19 @@ function deriveKey(password: string, salt: Buffer): Buffer {
  * @returns Base64エンコードされた暗号化文字列
  */
 export function encrypt(apiKey: string, masterPassword: string): string {
-  // ランダムなソルトとIVを生成
-  const salt = crypto.randomBytes(SALT_LENGTH)
-  const iv = crypto.randomBytes(IV_LENGTH)
+  const env = getEnvironment()
 
-  // パスワードから暗号化キーを導出
-  const key = deriveKey(masterPassword, salt)
+  const salt = crypto.randomBytes(env.cryptoSaltLength)
+  const iv = crypto.randomBytes(env.cryptoIvLength)
+  const key = deriveKey(masterPassword, salt, env.cryptoKeyLength, env.cryptoIterations)
 
-  // 暗号化
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv) as crypto.CipherGCM
+  const cipher = crypto.createCipheriv(env.cryptoAlgorithm, key, iv) as crypto.CipherGCM
   let encrypted = cipher.update(apiKey, 'utf8', 'hex')
   encrypted += cipher.final('hex')
 
-  // 認証タグを取得
   const tag = cipher.getAuthTag()
 
-  // salt + iv + tag + encrypted を結合してBase64エンコード
-  const result = Buffer.concat([
-    salt,
-    iv,
-    tag,
-    Buffer.from(encrypted, 'hex'),
-  ])
+  const result = Buffer.concat([salt, iv, tag, Buffer.from(encrypted, 'hex')])
 
   return result.toString('base64')
 }
@@ -56,23 +36,23 @@ export function encrypt(apiKey: string, masterPassword: string): string {
  * @returns 復号されたAPIキー
  */
 export function decrypt(encryptedData: string, masterPassword: string): string {
-  // Base64デコード
+  const env = getEnvironment()
+
   const buffer = Buffer.from(encryptedData, 'base64')
 
-  // salt, iv, tag, encrypted を抽出
-  const salt = buffer.subarray(0, SALT_LENGTH)
-  const iv = buffer.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH)
+  const salt = buffer.subarray(0, env.cryptoSaltLength)
+  const iv = buffer.subarray(env.cryptoSaltLength, env.cryptoSaltLength + env.cryptoIvLength)
   const tag = buffer.subarray(
-    SALT_LENGTH + IV_LENGTH,
-    SALT_LENGTH + IV_LENGTH + TAG_LENGTH
+    env.cryptoSaltLength + env.cryptoIvLength,
+    env.cryptoSaltLength + env.cryptoIvLength + env.cryptoTagLength
   )
-  const encrypted = buffer.subarray(SALT_LENGTH + IV_LENGTH + TAG_LENGTH)
+  const encrypted = buffer.subarray(
+    env.cryptoSaltLength + env.cryptoIvLength + env.cryptoTagLength
+  )
 
-  // パスワードから暗号化キーを導出
-  const key = deriveKey(masterPassword, salt)
+  const key = deriveKey(masterPassword, salt, env.cryptoKeyLength, env.cryptoIterations)
 
-  // 復号
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv) as crypto.DecipherGCM
+  const decipher = crypto.createDecipheriv(env.cryptoAlgorithm, key, iv) as crypto.DecipherGCM
   decipher.setAuthTag(tag)
 
   let decrypted = decipher.update(encrypted.toString('hex'), 'hex', 'utf8')

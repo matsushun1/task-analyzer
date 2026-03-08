@@ -8,16 +8,30 @@ describe('environment', () => {
     process.env = { ...originalEnv }
   })
 
-  afterAll(() => {
+  afterEach(() => {
     process.env = originalEnv
   })
 
+  const setCryptoEnvVars = () => {
+    process.env.CRYPTO_ALGORITHM = 'aes-256-gcm'
+    process.env.CRYPTO_IV_LENGTH = '16'
+    process.env.CRYPTO_SALT_LENGTH = '64'
+    process.env.CRYPTO_TAG_LENGTH = '16'
+    process.env.CRYPTO_KEY_LENGTH = '32'
+    process.env.CRYPTO_ITERATIONS = '100000'
+  }
+
+  const setAllEnvVars = () => {
+    process.env.SECRET_TOKEN = 'test-secret'
+    process.env.MASTER_PW = 'test-master-pw'
+    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
+    process.env.NOTION_TOKEN = 'test-notion-token'
+    setCryptoEnvVars()
+  }
+
   describe('getEnvironment', () => {
     it('すべての環境変数が設定されている場合、正しく取得できる', () => {
-      process.env.SECRET_TOKEN = 'test-secret'
-      process.env.MASTER_PW = 'test-master-pw'
-      process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
-      process.env.NOTION_TOKEN = 'test-notion-token'
+      setAllEnvVars()
 
       const env = getEnvironment()
 
@@ -25,6 +39,12 @@ describe('environment', () => {
       expect(env.masterPassword).toBe('test-master-pw')
       expect(env.anthropicApiKey).toBe('test-anthropic-key')
       expect(env.notionToken).toBe('test-notion-token')
+      expect(env.cryptoAlgorithm).toBe('aes-256-gcm')
+      expect(env.cryptoIvLength).toBe(16)
+      expect(env.cryptoSaltLength).toBe(64)
+      expect(env.cryptoTagLength).toBe(16)
+      expect(env.cryptoKeyLength).toBe(32)
+      expect(env.cryptoIterations).toBe(100000)
     })
 
     it('SECRET_TOKENが未設定の場合エラーをthrowする', () => {
@@ -66,6 +86,15 @@ describe('environment', () => {
 
       expect(() => getEnvironment()).toThrow(
         'Missing required environment variable: NOTION_TOKEN'
+      )
+    })
+
+    it('CRYPTO_ALGORITHMが未設定の場合エラーをthrowする', () => {
+      setAllEnvVars()
+      delete process.env.CRYPTO_ALGORITHM
+
+      expect(() => getEnvironment()).toThrow(
+        'Missing required environment variable: CRYPTO_ALGORITHM'
       )
     })
 

@@ -1,14 +1,17 @@
 import { Client } from '@notionhq/client'
 import type { BlockObjectResponse } from '@notionhq/client/build/src/api-endpoints'
-import { isNotionTask, type NotionTask } from '../models/types/task.types'
+import { buildTaskData } from '../models/task.model'
+import type { BlockWithChildren } from '../models/types/block.types'
+import { isNotionTask, type NotionTask, type TaskData } from '../models/types/task.types'
 import { BlockFetchError, NotionAPIError } from '../utils/errors'
+
+export type { BlockWithChildren }
 
 const EXCLUDED_BLOCK_TYPES = new Set(['code', 'image', 'video', 'file', 'audio'])
 
 const isBlockObjectResponse = (block: unknown): block is BlockObjectResponse =>
   typeof block === 'object' && block !== null && 'type' in block
 
-export type BlockWithChildren = BlockObjectResponse & { children: BlockWithChildren[] }
 
 export const fetchTasks = async (databaseId: string, notionToken: string): Promise<NotionTask[]> => {
   const client = new Client({ auth: notionToken })
@@ -47,7 +50,12 @@ export const fetchBlockChildren = async (pageId: string, notionToken: string): P
   }
 }
 
-export const processReport = async (taskDatabaseId: string, notionToken: string): Promise<void> => {
+export const processReport = async (taskDatabaseId: string, notionToken: string): Promise<TaskData[]> => {
   const tasks = await fetchTasks(taskDatabaseId, notionToken)
-  await Promise.all(tasks.map((task) => fetchBlockChildren(task.id, notionToken)))
+  return Promise.all(
+    tasks.map(async (task) => {
+      const blocks = await fetchBlockChildren(task.id, notionToken)
+      return buildTaskData(task, blocks)
+    })
+  )
 }

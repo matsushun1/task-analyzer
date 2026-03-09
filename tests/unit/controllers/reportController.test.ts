@@ -48,7 +48,7 @@ describe('generateDailyReport', () => {
       cryptoIterations: 100000,
     })
     mockVerifySecret.mockReturnValue(true)
-    mockProcessReport.mockResolvedValue(undefined)
+    mockProcessReport.mockResolvedValue([])
   })
 
   afterEach(() => {

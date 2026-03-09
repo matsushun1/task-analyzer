@@ -37,10 +37,19 @@ export const isNotionTask = (item: unknown): item is NotionTask => {
   return true
 }
 
+// サブタスク（to_doブロック配下）の内部形式
+export interface SubTaskData {
+  name: string
+  deadline?: string
+  details: string[]
+}
+
 // アプリケーション内部で使う形式
 export interface TaskData {
   id: string
   name: string
   status: string
   createdAt: Date
+  deadline?: string
+  subTasks: SubTaskData[]
 }

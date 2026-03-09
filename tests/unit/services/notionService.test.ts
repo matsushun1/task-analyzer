@@ -1,6 +1,6 @@
 import { Client } from '@notionhq/client'
 import type { BlockObjectResponse } from '@notionhq/client/build/src/api-endpoints'
-import { fetchTasks, fetchBlockChildren, processReport, type BlockWithChildren } from '../../../src/services/notionService'
+import { fetchTasks, fetchBlockChildren, processReport } from '../../../src/services/notionService'
 import { NotionAPIError, BlockFetchError } from '../../../src/utils/errors'
 
 jest.mock('@notionhq/client')
@@ -237,6 +237,37 @@ describe('notionService', () => {
 
       expect(mockListBlockChildren).toHaveBeenCalledWith({ block_id: 'task-1' })
       expect(mockListBlockChildren).toHaveBeenCalledWith({ block_id: 'task-2' })
+    })
+
+    it('TaskData[] を返す', async () => {
+      const task = {
+        id: 'task-1',
+        properties: {
+          Name: { title: [{ plain_text: 'タスク1' }] },
+          Status: { select: { name: 'Doing' } },
+          'Date Created': { created_time: '2026-03-08T00:00:00.000Z' },
+        },
+      }
+      mockQuery.mockResolvedValue({ results: [task] })
+      mockListBlockChildren.mockResolvedValue({ results: [] })
+
+      const result = await processReport('task-db-id', 'notion-token')
+
+      expect(result).toHaveLength(1)
+      expect(result[0]).toMatchObject({
+        id: 'task-1',
+        name: 'タスク1',
+        status: 'Doing',
+        subTasks: [],
+      })
+    })
+
+    it('タスクが0件のとき空配列を返す', async () => {
+      mockQuery.mockResolvedValue({ results: [] })
+
+      const result = await processReport('task-db-id', 'notion-token')
+
+      expect(result).toEqual([])
     })
 
     it('fetchTasksが失敗したときエラーをthrowする', async () => {

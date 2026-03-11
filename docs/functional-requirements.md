@@ -21,9 +21,9 @@ Notionボタン → Make.com → Cloud Run (TypeScript) → Claude API
 ### 1.3 処理フロー
 1. ユーザーがNotionのボタンを押下
 2. Notion Automations が Make.com に Webhook 送信
-3. Make.com が Notion API でタスクDB（Status="Doing"のみ）とデイリーノートDBを取得
-4. Make.com が Cloud Run に POST リクエスト
-5. Cloud Run が即座に 202 Accepted を返却（非同期処理開始）
+3. Make.com が Cloud Run に POST リクエスト
+4. Cloud Run が即座に 202 Accepted を返却（非同期処理開始）
+5. Cloud Run が環境変数のDB IDを使ってタスクDB（Status="Doing"のみ）とデイリーノートDBを取得
 6. Cloud Run が各ページのブロック（本文）を取得し、期限・詳細情報・工数を抽出
 7. Cloud Run が Claude API を呼び出してタスク分析・アドバイス生成
 8. Cloud Run が Notion API でレポートページを作成

@@ -21,10 +21,10 @@ graph TB
     User -->|1. ボタン押下| Notion
     Notion -->|2. Automation起動| NotionAuto
     NotionAuto -->|3. Webhook| Make
-    Make -->|4. タスクDB取得<br/>Status=Doing| Notion
-    Make -->|5. デイリーノートDB取得<br/>直近14日分| Notion
-    Make -->|6. POST Request| CloudRun
-    CloudRun -->|7. 202 Accepted| Make
+    Make -->|4. POST Request| CloudRun
+    CloudRun -->|5. 202 Accepted| Make
+    CloudRun -->|6. タスクDB取得<br/>Status=Doing| Notion
+    CloudRun -->|7. デイリーノートDB取得<br/>直近14日分| Notion
     CloudRun -->|8. ページブロック取得| Notion
     CloudRun -->|9. 分析リクエスト| Claude
     Claude -->|10. 分析結果| CloudRun
@@ -42,7 +42,7 @@ graph TB
 | レイヤー | 技術 | 役割 |
 |---------|------|------|
 | **UI** | Notion | ボタントリガー、データソース、レポート出力 |
-| **Orchestration** | Make.com | データ取得、Cloud Run呼び出し |
+| **Orchestration** | Make.com | Cloud Run呼び出し |
 | **Backend** | Cloud Run (TypeScript) | データ解析、AI連携、レポート生成 |
 | **AI** | Claude API (Sonnet 4.6) | タスク優先順位付け、アドバイス生成 |
 
@@ -64,15 +64,15 @@ sequenceDiagram
     User->>Notion: 1. レポート生成ボタン押下
     Notion->>Make.com: 2. Webhook送信 (Automation)
 
-    Make.com->>NotionAPI: 3. タスクDB取得 (Status="Doing")
-    NotionAPI-->>Make.com: タスクリスト
-
-    Make.com->>NotionAPI: 4. デイリーノートDB取得 (直近14日)
-    NotionAPI-->>Make.com: デイリーノート
-
-    Make.com->>CloudRun: 5. POST /analyze
+    Make.com->>CloudRun: 3. POST /analyze
     Note over CloudRun: 非同期処理開始
-    CloudRun-->>Make.com: 6. 202 Accepted
+    CloudRun-->>Make.com: 4. 202 Accepted
+
+    CloudRun->>NotionAPI: 5. タスクDB取得 (Status="Doing")
+    NotionAPI-->>CloudRun: タスクリスト
+
+    CloudRun->>NotionAPI: 6. デイリーノートDB取得 (直近14日)
+    NotionAPI-->>CloudRun: デイリーノート
 
     loop 各タスクページ
         CloudRun->>NotionAPI: 7. ページブロック取得

@@ -26,6 +26,8 @@ describe('environment', () => {
     process.env.MASTER_PW = 'test-master-pw'
     process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
     process.env.NOTION_TOKEN = 'test-notion-token'
+    process.env.NOTION_TASK_DB_ID = 'test-task-db-id'
+    process.env.NOTION_DAILY_NOTE_DB_ID = 'test-daily-note-db-id'
     setCryptoEnvVars()
   }
 
@@ -39,6 +41,8 @@ describe('environment', () => {
       expect(env.masterPassword).toBe('test-master-pw')
       expect(env.anthropicApiKey).toBe('test-anthropic-key')
       expect(env.notionToken).toBe('test-notion-token')
+      expect(env.notionTaskDatabaseId).toBe('test-task-db-id')
+      expect(env.notionDailyNoteDatabaseId).toBe('test-daily-note-db-id')
       expect(env.cryptoAlgorithm).toBe('aes-256-gcm')
       expect(env.cryptoIvLength).toBe(16)
       expect(env.cryptoSaltLength).toBe(64)
@@ -86,6 +90,24 @@ describe('environment', () => {
 
       expect(() => getEnvironment()).toThrow(
         'Missing required environment variable: NOTION_TOKEN'
+      )
+    })
+
+    it('NOTION_TASK_DB_IDが未設定の場合エラーをthrowする', () => {
+      setAllEnvVars()
+      delete process.env.NOTION_TASK_DB_ID
+
+      expect(() => getEnvironment()).toThrow(
+        'Missing required environment variable: NOTION_TASK_DB_ID'
+      )
+    })
+
+    it('NOTION_DAILY_NOTE_DB_IDが未設定の場合エラーをthrowする', () => {
+      setAllEnvVars()
+      delete process.env.NOTION_DAILY_NOTE_DB_ID
+
+      expect(() => getEnvironment()).toThrow(
+        'Missing required environment variable: NOTION_DAILY_NOTE_DB_ID'
       )
     })
 

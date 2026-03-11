@@ -3,6 +3,8 @@ interface Environment {
   masterPassword: string
   anthropicApiKey: string
   notionToken: string
+  notionTaskDatabaseId: string
+  notionDailyNoteDatabaseId: string
   cryptoAlgorithm: string
   cryptoIvLength: number
   cryptoSaltLength: number
@@ -26,6 +28,8 @@ export const getEnvironment = (): Environment => ({
   masterPassword: requireEnv('MASTER_PW'),
   anthropicApiKey: requireEnv('ANTHROPIC_API_KEY'),
   notionToken: requireEnv('NOTION_TOKEN'),
+  notionTaskDatabaseId: requireEnv('NOTION_TASK_DB_ID'),
+  notionDailyNoteDatabaseId: requireEnv('NOTION_DAILY_NOTE_DB_ID'),
   cryptoAlgorithm: requireEnv('CRYPTO_ALGORITHM'),
   cryptoIvLength: requireEnvInt('CRYPTO_IV_LENGTH'),
   cryptoSaltLength: requireEnvInt('CRYPTO_SALT_LENGTH'),

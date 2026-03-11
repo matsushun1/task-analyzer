@@ -21,7 +21,7 @@ const mockVerifySecret = authService.verifySecret as jest.MockedFunction<
 const makeRequest = (overrides: Partial<Request> = {}): Request =>
   ({
     headers: { 'x-api-key': 'encrypted-token' },
-    body: { taskDatabaseId: 'task-db-id' },
+    body: {},
     ...overrides,
   }) as unknown as Request
 
@@ -40,6 +40,8 @@ describe('generateDailyReport', () => {
       masterPassword: 'master-pw',
       anthropicApiKey: 'anthropic-key',
       notionToken: 'notion-token',
+      notionTaskDatabaseId: 'task-db-id',
+      notionDailyNoteDatabaseId: 'daily-note-db-id',
       cryptoAlgorithm: 'aes-256-gcm',
       cryptoIvLength: 16,
       cryptoSaltLength: 64,
@@ -91,7 +93,7 @@ describe('generateDailyReport', () => {
   })
 
   describe('serviceへの委譲', () => {
-    it('認証成功後にprocessReportをtaskDatabaseIdとnotionTokenで呼ぶ', async () => {
+    it('認証成功後にprocessReportを環境変数のtaskDatabaseIdとnotionTokenで呼ぶ', async () => {
       const req = makeRequest()
       const res = makeResponse()
 

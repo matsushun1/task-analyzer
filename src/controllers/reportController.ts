@@ -15,7 +15,7 @@ export const generateDailyReport = (req: Request, res: Response): void => {
 
   res.status(202).json({ message: 'Accepted' })
 
-  void processReport(req.body.taskDatabaseId as string, env.notionToken).catch((error) => {
+  void processReport(env.notionTaskDatabaseId, env.notionToken).catch((error) => {
     logger.error('Failed to generate daily report', error)
   })
 }

@@ -1,7 +1,9 @@
 import { Client } from '@notionhq/client'
 import type { BlockObjectResponse } from '@notionhq/client/build/src/api-endpoints'
+import { buildDailyNoteData } from '../models/dailyNote.model'
 import { buildTaskData } from '../models/task.model'
 import type { BlockWithChildren } from '../models/types/block.types'
+import { isNotionDailyNote, type DailyNoteData, type NotionDailyNote } from '../models/types/dailyNote.types'
 import { isNotionTask, type NotionTask, type TaskData } from '../models/types/task.types'
 import { BlockFetchError, NotionAPIError } from '../utils/errors'
 
@@ -56,6 +58,34 @@ export const processReport = async (taskDatabaseId: string, notionToken: string)
     tasks.map(async (task) => {
       const blocks = await fetchBlockChildren(task.id, notionToken)
       return buildTaskData(task, blocks)
+    })
+  )
+}
+
+export const fetchDailyNotes = async (databaseId: string, notionToken: string): Promise<NotionDailyNote[]> => {
+  const client = new Client({ auth: notionToken })
+  // UTC基準で14日前の日付を算出する（Cloud Run はUTCで動作するため問題なし）
+  const fourteenDaysAgo = new Date()
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+  const dateString = fourteenDaysAgo.toISOString().split('T')[0]
+
+  try {
+    const response = await client.dataSources.query({
+      data_source_id: databaseId,
+      filter: { property: '日付', date: { on_or_after: dateString } },
+    })
+    return (response.results as unknown[]).filter(isNotionDailyNote)
+  } catch (error) {
+    throw new NotionAPIError('Failed to fetch daily notes', error)
+  }
+}
+
+export const processDailyNotes = async (databaseId: string, notionToken: string): Promise<DailyNoteData[]> => {
+  const notes = await fetchDailyNotes(databaseId, notionToken)
+  return Promise.all(
+    notes.map(async (note) => {
+      const blocks = await fetchBlockChildren(note.id, notionToken)
+      return buildDailyNoteData(note, blocks)
     })
   )
 }

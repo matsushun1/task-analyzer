@@ -1,6 +1,6 @@
 import { Client } from '@notionhq/client'
 import type { BlockObjectResponse } from '@notionhq/client/build/src/api-endpoints'
-import { fetchTasks, fetchBlockChildren, processReport } from '../../../src/services/notionService'
+import { fetchTasks, fetchBlockChildren, processReport, fetchDailyNotes, processDailyNotes } from '../../../src/services/notionService'
 import { NotionAPIError, BlockFetchError } from '../../../src/utils/errors'
 
 jest.mock('@notionhq/client')
@@ -274,6 +274,105 @@ describe('notionService', () => {
       mockQuery.mockRejectedValue(new Error('Notion API error'))
 
       await expect(processReport('task-db-id', 'notion-token')).rejects.toThrow(NotionAPIError)
+    })
+  })
+
+  describe('fetchDailyNotes', () => {
+    afterEach(() => {
+      jest.useRealTimers()
+    })
+
+    it('日付プロパティのフィルタでデータベースをクエリする', async () => {
+      jest.useFakeTimers()
+      jest.setSystemTime(new Date('2026-03-11T00:00:00.000Z'))
+      mockQuery.mockResolvedValue({ results: [] })
+
+      await fetchDailyNotes('daily-db-id', 'notion-token')
+
+      expect(mockQuery).toHaveBeenCalledWith({
+        data_source_id: 'daily-db-id',
+        filter: {
+          property: '日付',
+          date: { on_or_after: '2026-02-25' },
+        },
+      })
+    })
+
+    it('isNotionDailyNote を通過したノートのみ返す', async () => {
+      const validNote = {
+        id: 'note-1',
+        properties: { 日付: { date: { start: '2026-03-10' } } },
+      }
+      const invalidNote = { id: 'note-2', properties: {} }
+      mockQuery.mockResolvedValue({ results: [validNote, invalidNote] })
+
+      const result = await fetchDailyNotes('daily-db-id', 'notion-token')
+
+      expect(result).toHaveLength(1)
+      expect(result[0]).toEqual(validNote)
+    })
+
+    it('ノートが0件のとき空配列を返す', async () => {
+      mockQuery.mockResolvedValue({ results: [] })
+
+      const result = await fetchDailyNotes('daily-db-id', 'notion-token')
+
+      expect(result).toEqual([])
+    })
+
+    it('Notion APIがエラーを返したとき NotionAPIError をthrowする', async () => {
+      mockQuery.mockRejectedValue(new Error('Notion API error'))
+
+      await expect(fetchDailyNotes('daily-db-id', 'notion-token')).rejects.toThrow(NotionAPIError)
+    })
+  })
+
+  describe('processDailyNotes', () => {
+    it('fetchDailyNotes で取得したノートIDで fetchBlockChildren を呼ぶ', async () => {
+      const note = {
+        id: 'note-1',
+        properties: { 日付: { date: { start: '2026-03-10' } } },
+      }
+      mockQuery.mockResolvedValue({ results: [note] })
+      mockListBlockChildren.mockResolvedValue({ results: [] })
+
+      await processDailyNotes('daily-db-id', 'notion-token')
+
+      expect(mockListBlockChildren).toHaveBeenCalledWith({ block_id: 'note-1' })
+    })
+
+    it('DailyNoteData[] を返す', async () => {
+      const note = {
+        id: 'note-1',
+        properties: { 日付: { date: { start: '2026-03-10' } } },
+      }
+      mockQuery.mockResolvedValue({ results: [note] })
+      mockListBlockChildren.mockResolvedValue({ results: [] })
+
+      const result = await processDailyNotes('daily-db-id', 'notion-token')
+
+      expect(result).toHaveLength(1)
+      expect(result[0]).toMatchObject({
+        date: '2026-03-10',
+        todayTasks: [],
+        nextTasks: [],
+        issues: [],
+        healthStatus: '',
+      })
+    })
+
+    it('ノートが0件のとき空配列を返す', async () => {
+      mockQuery.mockResolvedValue({ results: [] })
+
+      const result = await processDailyNotes('daily-db-id', 'notion-token')
+
+      expect(result).toEqual([])
+    })
+
+    it('fetchDailyNotes が失敗したときエラーをthrowする', async () => {
+      mockQuery.mockRejectedValue(new Error('Notion API error'))
+
+      await expect(processDailyNotes('daily-db-id', 'notion-token')).rejects.toThrow(NotionAPIError)
     })
   })
 })

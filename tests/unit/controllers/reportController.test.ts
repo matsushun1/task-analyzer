@@ -2,23 +2,14 @@ import type { Request, Response } from 'express'
 import { generateDailyReport } from '../../../src/controllers/reportController'
 import * as usecase from '../../../src/usecases/generateDailyReportUseCase'
 import * as authService from '../../../src/services/authService'
-import * as environment from '../../../src/config/environment'
-import { NotionClient } from '../../../src/clients/notionClient'
-import { ClaudeClient } from '../../../src/clients/claudeClient'
 
 jest.mock('../../../src/usecases/generateDailyReportUseCase')
 jest.mock('../../../src/services/authService')
-jest.mock('../../../src/config/environment')
 
 const mockGenerateDailyReportUseCase = usecase.generateDailyReportUseCase as jest.MockedFunction<
   typeof usecase.generateDailyReportUseCase
 >
-const mockGetEnvironment = environment.getEnvironment as jest.MockedFunction<
-  typeof environment.getEnvironment
->
-const mockVerifySecret = authService.verifySecret as jest.MockedFunction<
-  typeof authService.verifySecret
->
+const mockVerifySecret = authService.verifySecret as jest.MockedFunction<typeof authService.verifySecret>
 
 const makeRequest = (overrides: Partial<Request> = {}): Request =>
   ({
@@ -37,20 +28,6 @@ const makeResponse = (): Response => {
 
 describe('generateDailyReport', () => {
   beforeEach(() => {
-    mockGetEnvironment.mockReturnValue({
-      secretToken: 'valid-secret-token',
-      masterPassword: 'master-pw',
-      anthropicApiKey: 'anthropic-key',
-      notionToken: 'notion-token',
-      notionTaskDatabaseId: 'task-db-id',
-      notionDailyNoteDatabaseId: 'daily-note-db-id',
-      cryptoAlgorithm: 'aes-256-gcm',
-      cryptoIvLength: 16,
-      cryptoSaltLength: 64,
-      cryptoTagLength: 16,
-      cryptoKeyLength: 32,
-      cryptoIterations: 100000,
-    })
     mockVerifySecret.mockReturnValue(true)
     mockGenerateDailyReportUseCase.mockResolvedValue({
       todayTasks: [],
@@ -71,7 +48,7 @@ describe('generateDailyReport', () => {
 
       generateDailyReport(req, res)
 
-      expect(mockVerifySecret).toHaveBeenCalledWith('encrypted-token', 'master-pw', 'valid-secret-token')
+      expect(mockVerifySecret).toHaveBeenCalledWith('encrypted-token')
       expect(res.status).toHaveBeenCalledWith(202)
       expect(res.json).toHaveBeenCalledWith({ message: 'Accepted' })
     })
@@ -100,19 +77,14 @@ describe('generateDailyReport', () => {
   })
 
   describe('UseCaseへの委譲', () => {
-    it('認証成功後にgenerateDailyReportUseCaseを環境変数で呼ぶ', async () => {
+    it('認証成功後にgenerateDailyReportUseCaseを引数なしで呼ぶ', async () => {
       const req = makeRequest()
       const res = makeResponse()
 
       generateDailyReport(req, res)
       await new Promise(process.nextTick)
 
-      expect(mockGenerateDailyReportUseCase).toHaveBeenCalledWith(
-        'task-db-id',
-        'daily-note-db-id',
-        expect.any(NotionClient),
-        expect.any(ClaudeClient)
-      )
+      expect(mockGenerateDailyReportUseCase).toHaveBeenCalledWith()
     })
 
     it('認証に失敗したときはgenerateDailyReportUseCaseを呼ばない', async () => {

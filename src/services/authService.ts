@@ -1,11 +1,13 @@
 import crypto from 'crypto'
 import { decrypt } from '../utils/cryptoApiKey'
+import { getEnvironment } from '../config/environment'
 
-export const verifySecret = (encryptedApiKey: string, masterPassword: string, secretToken: string): boolean => {
+export const verifySecret = (encryptedApiKey: string): boolean => {
   try {
-    const decrypted = decrypt(encryptedApiKey, masterPassword)
+    const env = getEnvironment()
+    const decrypted = decrypt(encryptedApiKey, env.masterPassword)
     const decryptedBuf = Buffer.from(decrypted)
-    const secretBuf = Buffer.from(secretToken)
+    const secretBuf = Buffer.from(env.secretToken)
     if (decryptedBuf.length !== secretBuf.length) {
       return false
     }

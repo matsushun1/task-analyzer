@@ -1,4 +1,4 @@
-interface Environment {
+export interface Environment {
   secretToken: string
   masterPassword: string
   anthropicApiKey: string

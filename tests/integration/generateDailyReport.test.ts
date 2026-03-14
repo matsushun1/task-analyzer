@@ -12,8 +12,6 @@
  */
 import * as dotenv from 'dotenv'
 import { generateDailyReportUseCase } from '../../src/usecases/generateDailyReportUseCase'
-import { NotionClient } from '../../src/clients/notionClient'
-import { ClaudeClient } from '../../src/clients/claudeClient'
 
 dotenv.config()
 
@@ -31,12 +29,7 @@ describe('generateDailyReportUseCase（統合テスト）', () => {
   }
 
   it('Notionからデータを取得してClaudeが分析結果を返す', async () => {
-    const result = await generateDailyReportUseCase(
-      taskDatabaseId,
-      dailyNoteDatabaseId,
-      new NotionClient(notionToken),
-      new ClaudeClient(anthropicApiKey)
-    )
+    const result = await generateDailyReportUseCase()
 
     console.log('=== Claude 分析結果 ===')
     console.log(JSON.stringify(result, null, 2))

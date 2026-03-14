@@ -1,18 +1,17 @@
 import { processReport, processDailyNotes } from '../services/notionService'
 import { analyzeTasksAndNotes } from '../services/claudeService'
 import type { ClaudeAnalysisResult } from '../models/types/analysis.types'
-import type { NotionClient } from '../clients/notionClient'
-import type { ClaudeClient } from '../clients/claudeClient'
+import { getEnvironment } from '../config/environment'
+import { NotionClient } from '../clients/notionClient'
+import { ClaudeClient } from '../clients/claudeClient'
 
-export const generateDailyReportUseCase = async (
-  taskDatabaseId: string,
-  dailyNoteDatabaseId: string,
-  notionClient: NotionClient,
-  claudeClient: ClaudeClient
-): Promise<ClaudeAnalysisResult> => {
+export const generateDailyReportUseCase = async (): Promise<ClaudeAnalysisResult> => {
+  const env = getEnvironment()
+  const notionClient = new NotionClient(env.notionToken)
+  const claudeClient = new ClaudeClient(env.anthropicApiKey)
   const [tasks, notes] = await Promise.all([
-    processReport(taskDatabaseId, notionClient),
-    processDailyNotes(dailyNoteDatabaseId, notionClient),
+    processReport(env.notionTaskDatabaseId, notionClient),
+    processDailyNotes(env.notionDailyNoteDatabaseId, notionClient),
   ])
   return analyzeTasksAndNotes(tasks, notes, claudeClient)
 }

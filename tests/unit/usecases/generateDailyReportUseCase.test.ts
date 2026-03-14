@@ -2,16 +2,14 @@ import { generateDailyReportUseCase } from '../../../src/usecases/generateDailyR
 import * as notionService from '../../../src/services/notionService'
 import * as claudeService from '../../../src/services/claudeService'
 import * as environment from '../../../src/config/environment'
-import * as clientFactory from '../../../src/clients/clientFactory'
-import type { NotionClient } from '../../../src/clients/notionClient'
-import type { ClaudeClient } from '../../../src/clients/claudeClient'
-import type { Client } from '@notionhq/client'
-import Anthropic from '@anthropic-ai/sdk'
+import { NotionClient } from '../../../src/clients/notionClient'
+import { ClaudeClient } from '../../../src/clients/claudeClient'
 
 jest.mock('../../../src/services/notionService')
 jest.mock('../../../src/services/claudeService')
 jest.mock('../../../src/config/environment')
-jest.mock('../../../src/clients/clientFactory')
+jest.mock('../../../src/clients/notionClient')
+jest.mock('../../../src/clients/claudeClient')
 
 const mockProcessReport = notionService.processReport as jest.MockedFunction<typeof notionService.processReport>
 const mockProcessDailyNotes = notionService.processDailyNotes as jest.MockedFunction<
@@ -21,7 +19,8 @@ const mockAnalyzeTasksAndNotes = claudeService.analyzeTasksAndNotes as jest.Mock
   typeof claudeService.analyzeTasksAndNotes
 >
 const mockGetEnvironment = environment.getEnvironment as jest.MockedFunction<typeof environment.getEnvironment>
-const mockCreateClients = clientFactory.createClients as jest.MockedFunction<typeof clientFactory.createClients>
+const MockNotionClient = NotionClient as jest.MockedClass<typeof NotionClient>
+const MockClaudeClient = ClaudeClient as jest.MockedClass<typeof ClaudeClient>
 
 const validAnalysisResult = {
   todayTasks: [],
@@ -29,9 +28,6 @@ const validAnalysisResult = {
   healthAdvice: '',
   taskManagementAdvice: '',
 }
-
-const stubNotionClient: NotionClient = { inner: {} as Client }
-const stubClaudeClient: ClaudeClient = { inner: {} as Anthropic }
 
 const stubEnv = {
   secretToken: 'secret',
@@ -51,7 +47,6 @@ const stubEnv = {
 describe('generateDailyReportUseCase', () => {
   beforeEach(() => {
     mockGetEnvironment.mockReturnValue(stubEnv)
-    mockCreateClients.mockReturnValue({ notionClient: stubNotionClient, claudeClient: stubClaudeClient })
     mockProcessReport.mockResolvedValue([])
     mockProcessDailyNotes.mockResolvedValue([])
     mockAnalyzeTasksAndNotes.mockResolvedValue(validAnalysisResult)
@@ -61,16 +56,28 @@ describe('generateDailyReportUseCase', () => {
     jest.clearAllMocks()
   })
 
+  it('notionToken を使って NotionClient を生成する', async () => {
+    await generateDailyReportUseCase()
+
+    expect(MockNotionClient).toHaveBeenCalledWith('notion-token')
+  })
+
+  it('anthropicApiKey を使って ClaudeClient を生成する', async () => {
+    await generateDailyReportUseCase()
+
+    expect(MockClaudeClient).toHaveBeenCalledWith('anthropic-key')
+  })
+
   it('processReportをtaskDatabaseIdとnotionClientで呼ぶ', async () => {
     await generateDailyReportUseCase()
 
-    expect(mockProcessReport).toHaveBeenCalledWith('task-db-id', stubNotionClient)
+    expect(mockProcessReport).toHaveBeenCalledWith('task-db-id', expect.any(NotionClient))
   })
 
   it('processDailyNotesをdailyNoteDatabaseIdとnotionClientで呼ぶ', async () => {
     await generateDailyReportUseCase()
 
-    expect(mockProcessDailyNotes).toHaveBeenCalledWith('daily-db-id', stubNotionClient)
+    expect(mockProcessDailyNotes).toHaveBeenCalledWith('daily-db-id', expect.any(NotionClient))
   })
 
   it('processReportとprocessDailyNotesを並列で呼ぶ（両方呼ばれることを確認）', async () => {
@@ -88,7 +95,7 @@ describe('generateDailyReportUseCase', () => {
 
     await generateDailyReportUseCase()
 
-    expect(mockAnalyzeTasksAndNotes).toHaveBeenCalledWith(tasks, notes, stubClaudeClient)
+    expect(mockAnalyzeTasksAndNotes).toHaveBeenCalledWith(tasks, notes, expect.any(ClaudeClient))
   })
 
   it('ClaudeAnalysisResult を返す', async () => {

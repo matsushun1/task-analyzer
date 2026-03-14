@@ -1,4 +1,4 @@
-import { Client } from '@notionhq/client'
+import type { Client } from '@notionhq/client'
 import type { BlockObjectResponse } from '@notionhq/client/build/src/api-endpoints'
 import { buildDailyNoteData } from '../models/dailyNote.model'
 import { buildTaskData } from '../models/task.model'
@@ -6,6 +6,7 @@ import type { BlockWithChildren } from '../models/types/block.types'
 import { isNotionDailyNote, type DailyNoteData, type NotionDailyNote } from '../models/types/dailyNote.types'
 import { isNotionTask, type NotionTask, type TaskData } from '../models/types/task.types'
 import { BlockFetchError, NotionAPIError } from '../utils/errors'
+import type { NotionClient } from '../clients/notionClient'
 
 export type { BlockWithChildren }
 
@@ -15,10 +16,9 @@ const isBlockObjectResponse = (block: unknown): block is BlockObjectResponse =>
   typeof block === 'object' && block !== null && 'type' in block
 
 
-export const fetchTasks = async (databaseId: string, notionToken: string): Promise<NotionTask[]> => {
-  const client = new Client({ auth: notionToken })
+export const fetchTasks = async (databaseId: string, client: NotionClient): Promise<NotionTask[]> => {
   try {
-    const response = await client.dataSources.query({
+    const response = await client.inner.dataSources.query({
       data_source_id: databaseId,
       filter: {
         property: 'Status',
@@ -43,34 +43,32 @@ const fetchChildrenRecursively = async (client: Client, blockId: string): Promis
   )
 }
 
-export const fetchBlockChildren = async (pageId: string, notionToken: string): Promise<BlockWithChildren[]> => {
-  const client = new Client({ auth: notionToken })
+export const fetchBlockChildren = async (pageId: string, client: NotionClient): Promise<BlockWithChildren[]> => {
   try {
-    return await fetchChildrenRecursively(client, pageId)
+    return await fetchChildrenRecursively(client.inner, pageId)
   } catch (error) {
     throw new BlockFetchError(pageId, error)
   }
 }
 
-export const processReport = async (taskDatabaseId: string, notionToken: string): Promise<TaskData[]> => {
-  const tasks = await fetchTasks(taskDatabaseId, notionToken)
+export const processReport = async (taskDatabaseId: string, client: NotionClient): Promise<TaskData[]> => {
+  const tasks = await fetchTasks(taskDatabaseId, client)
   return Promise.all(
     tasks.map(async (task) => {
-      const blocks = await fetchBlockChildren(task.id, notionToken)
+      const blocks = await fetchBlockChildren(task.id, client)
       return buildTaskData(task, blocks)
     })
   )
 }
 
-export const fetchDailyNotes = async (databaseId: string, notionToken: string): Promise<NotionDailyNote[]> => {
-  const client = new Client({ auth: notionToken })
+export const fetchDailyNotes = async (databaseId: string, client: NotionClient): Promise<NotionDailyNote[]> => {
   // UTC基準で14日前の日付を算出する（Cloud Run はUTCで動作するため問題なし）
   const fourteenDaysAgo = new Date()
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
   const dateString = fourteenDaysAgo.toISOString().split('T')[0]
 
   try {
-    const response = await client.dataSources.query({
+    const response = await client.inner.dataSources.query({
       data_source_id: databaseId,
       filter: { property: '日付', date: { on_or_after: dateString } },
     })
@@ -80,11 +78,11 @@ export const fetchDailyNotes = async (databaseId: string, notionToken: string): 
   }
 }
 
-export const processDailyNotes = async (databaseId: string, notionToken: string): Promise<DailyNoteData[]> => {
-  const notes = await fetchDailyNotes(databaseId, notionToken)
+export const processDailyNotes = async (databaseId: string, client: NotionClient): Promise<DailyNoteData[]> => {
+  const notes = await fetchDailyNotes(databaseId, client)
   return Promise.all(
     notes.map(async (note) => {
-      const blocks = await fetchBlockChildren(note.id, notionToken)
+      const blocks = await fetchBlockChildren(note.id, client)
       return buildDailyNoteData(note, blocks)
     })
   )

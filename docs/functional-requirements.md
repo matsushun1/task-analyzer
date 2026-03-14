@@ -220,7 +220,7 @@ Notionボタン → Make.com → Cloud Run (TypeScript) → Claude API
 
 ### 4.2 AI分析の要件
 
-**Claude API モデル**: claude-sonnet-4-6-20260217（2026年2月17日リリース）
+**Claude API モデル**: claude-sonnet-4-6（2026年2月17日リリース）
 
 **分析内容:**
 1. **今日のタスク**: 期限・工数傾向を考慮した優先順位付け

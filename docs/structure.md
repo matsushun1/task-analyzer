@@ -23,6 +23,7 @@ task-analyzer/
 │   │   └── types/                      # Notionブロック型定義
 │   │
 │   ├── services/                       # 【Services層】外部API通信
+│   ├── clients/                        # 【Clients層】APIクライアント初期化
 │   ├── middleware/                     # ミドルウェア
 │   ├── utils/                          # ユーティリティ
 │   └── config/                         # 設定
@@ -67,6 +68,11 @@ graph TB
         AuthService[authService.ts]
     end
 
+    subgraph "Clients層"
+        NotionClient[notionClient.ts]
+        ClaudeClient[claudeClient.ts]
+    end
+
     subgraph "Utils層"
         Logger[logger.ts]
         Errors[errors.ts]
@@ -86,6 +92,11 @@ graph TB
     Controller --> ReportView
     ReportView --> Blocks
     ReportView --> NotionService
+
+    Controller --> NotionClient
+    Controller --> ClaudeClient
+    NotionService --> NotionClient
+    ClaudeService --> ClaudeClient
 
     NotionService --> Logger
     ClaudeService --> Logger
@@ -151,6 +162,17 @@ graph TB
 
 ---
 
+### 📁 `src/clients/` - Clients層
+
+**役割**: 外部APIクライアントの初期化・保持
+
+- **notionClient**: Notion SDK `Client` をラップ。`inner` プロパティでSDKインスタンスを公開
+- **claudeClient**: Anthropic SDK `Anthropic` をラップ。`inner` プロパティでSDKインスタンスを公開
+
+Controller でリクエストごとに1インスタンスを生成し、UseCase・Service に注入する。
+
+---
+
 ### 📁 `src/services/` - Services層
 
 **役割**: 外部API（Notion, Claude）との通信
@@ -161,7 +183,7 @@ graph TB
   - エラーレポート作成
 
 - **claudeService**: Claude API呼び出し
-  - モデル: claude-sonnet-4-6-20260217
+  - モデル: claude-sonnet-4-6
   - max_tokens: 2000
   - リトライなし（コスト考慮）
 
@@ -272,10 +294,12 @@ sequenceDiagram
 ```
 
 **依存の方向**:
-- Controller → Model/View/Services/Utils
+- Controller → Model/View/Services/Clients/Utils
+- UseCase → Services/Clients
 - Model → Services/Utils/Parsers
 - View → Services/Utils/Blocks
-- Services → Utils
+- Services → Clients/Utils
+- Clients → 外部SDK（初期化のみ）
 
 **原則**:
 - 上位層から下位層への依存のみ許可

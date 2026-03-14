@@ -11,6 +11,7 @@ import * as dotenv from 'dotenv'
 import { fetchDailyNotes, fetchBlockChildren } from '../../src/services/notionService'
 import { buildDailyNoteData } from '../../src/models/dailyNote.model'
 import { isNotionDailyNote } from '../../src/models/types/dailyNote.types'
+import { NotionClient } from '../../src/clients/notionClient'
 
 dotenv.config()
 
@@ -25,7 +26,8 @@ describe('processDailyNotes（統合テスト）', () => {
 
   it('デイリーノートを取得してDailyNoteData[]に変換できる', async () => {
     // fetchDailyNotes は直近14日フィルタのため、DBに存在するノートを直接取得して検証
-    const notes = await fetchDailyNotes(dailyNoteDatabaseId, notionToken)
+    const notionClient = new NotionClient(notionToken)
+    const notes = await fetchDailyNotes(dailyNoteDatabaseId, notionClient)
 
     // フィルタ範囲外でも構造テストができるよう、1件目のブロックを直接取得して変換を検証
     // （DB全件取得は別途確認済み。ここではパイプライン全体の結合を確認する）
@@ -38,7 +40,7 @@ describe('processDailyNotes（統合テスト）', () => {
       const firstNote = response.results[0]
       expect(isNotionDailyNote(firstNote)).toBe(true)
       if (!isNotionDailyNote(firstNote)) return
-      const blocks = await fetchBlockChildren(firstNote.id, notionToken)
+      const blocks = await fetchBlockChildren(firstNote.id, notionClient)
       const noteData = buildDailyNoteData(firstNote, blocks)
       expect(noteData.date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
       expect(Array.isArray(noteData.todayTasks)).toBe(true)
@@ -47,7 +49,7 @@ describe('processDailyNotes（統合テスト）', () => {
 
     const results = await Promise.all(
       notes.map(async (note) => {
-        const blocks = await fetchBlockChildren(note.id, notionToken)
+        const blocks = await fetchBlockChildren(note.id, notionClient)
         return buildDailyNoteData(note, blocks)
       })
     )

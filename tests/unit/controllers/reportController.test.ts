@@ -1,15 +1,17 @@
 import type { Request, Response } from 'express'
 import { generateDailyReport } from '../../../src/controllers/reportController'
-import * as notionService from '../../../src/services/notionService'
+import * as usecase from '../../../src/usecases/generateDailyReportUseCase'
 import * as authService from '../../../src/services/authService'
 import * as environment from '../../../src/config/environment'
+import { NotionClient } from '../../../src/clients/notionClient'
+import { ClaudeClient } from '../../../src/clients/claudeClient'
 
-jest.mock('../../../src/services/notionService')
+jest.mock('../../../src/usecases/generateDailyReportUseCase')
 jest.mock('../../../src/services/authService')
 jest.mock('../../../src/config/environment')
 
-const mockProcessReport = notionService.processReport as jest.MockedFunction<
-  typeof notionService.processReport
+const mockGenerateDailyReportUseCase = usecase.generateDailyReportUseCase as jest.MockedFunction<
+  typeof usecase.generateDailyReportUseCase
 >
 const mockGetEnvironment = environment.getEnvironment as jest.MockedFunction<
   typeof environment.getEnvironment
@@ -50,7 +52,12 @@ describe('generateDailyReport', () => {
       cryptoIterations: 100000,
     })
     mockVerifySecret.mockReturnValue(true)
-    mockProcessReport.mockResolvedValue([])
+    mockGenerateDailyReportUseCase.mockResolvedValue({
+      todayTasks: [],
+      overdueTasks: [],
+      healthAdvice: '',
+      taskManagementAdvice: '',
+    })
   })
 
   afterEach(() => {
@@ -92,18 +99,23 @@ describe('generateDailyReport', () => {
     })
   })
 
-  describe('serviceへの委譲', () => {
-    it('認証成功後にprocessReportを環境変数のtaskDatabaseIdとnotionTokenで呼ぶ', async () => {
+  describe('UseCaseへの委譲', () => {
+    it('認証成功後にgenerateDailyReportUseCaseを環境変数で呼ぶ', async () => {
       const req = makeRequest()
       const res = makeResponse()
 
       generateDailyReport(req, res)
       await new Promise(process.nextTick)
 
-      expect(mockProcessReport).toHaveBeenCalledWith('task-db-id', 'notion-token')
+      expect(mockGenerateDailyReportUseCase).toHaveBeenCalledWith(
+        'task-db-id',
+        'daily-note-db-id',
+        expect.any(NotionClient),
+        expect.any(ClaudeClient)
+      )
     })
 
-    it('認証に失敗したときはprocessReportを呼ばない', async () => {
+    it('認証に失敗したときはgenerateDailyReportUseCaseを呼ばない', async () => {
       mockVerifySecret.mockReturnValue(false)
 
       const req = makeRequest()
@@ -112,11 +124,11 @@ describe('generateDailyReport', () => {
       generateDailyReport(req, res)
       await new Promise(process.nextTick)
 
-      expect(mockProcessReport).not.toHaveBeenCalled()
+      expect(mockGenerateDailyReportUseCase).not.toHaveBeenCalled()
     })
 
-    it('processReportが失敗しても202は返済済みのためレスポンスに影響しない', async () => {
-      mockProcessReport.mockRejectedValue(new Error('report failed'))
+    it('generateDailyReportUseCaseが失敗しても202は返却済みのためレスポンスに影響しない', async () => {
+      mockGenerateDailyReportUseCase.mockRejectedValue(new Error('usecase failed'))
 
       const req = makeRequest()
       const res = makeResponse()

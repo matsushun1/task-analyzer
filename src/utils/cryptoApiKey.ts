@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { getEnvironment } from '../config/environment'
+import { getCryptoConfig } from '../config/environment'
 
 function deriveKey(password: string, salt: Buffer, keyLength: number, iterations: number): Buffer {
   return crypto.pbkdf2Sync(password, salt, iterations, keyLength, 'sha512')
@@ -12,13 +12,13 @@ function deriveKey(password: string, salt: Buffer, keyLength: number, iterations
  * @returns Base64エンコードされた暗号化文字列
  */
 export function encrypt(apiKey: string, masterPassword: string): string {
-  const env = getEnvironment()
+  const env = getCryptoConfig()
 
-  const salt = crypto.randomBytes(env.cryptoSaltLength)
-  const iv = crypto.randomBytes(env.cryptoIvLength)
-  const key = deriveKey(masterPassword, salt, env.cryptoKeyLength, env.cryptoIterations)
+  const salt = crypto.randomBytes(env.saltLength)
+  const iv = crypto.randomBytes(env.ivLength)
+  const key = deriveKey(masterPassword, salt, env.keyLength, env.iterations)
 
-  const cipher = crypto.createCipheriv(env.cryptoAlgorithm, key, iv) as crypto.CipherGCM
+  const cipher = crypto.createCipheriv(env.algorithm, key, iv) as crypto.CipherGCM
   let encrypted = cipher.update(apiKey, 'utf8', 'hex')
   encrypted += cipher.final('hex')
 
@@ -36,23 +36,23 @@ export function encrypt(apiKey: string, masterPassword: string): string {
  * @returns 復号されたAPIキー
  */
 export function decrypt(encryptedData: string, masterPassword: string): string {
-  const env = getEnvironment()
+  const env = getCryptoConfig()
 
   const buffer = Buffer.from(encryptedData, 'base64')
 
-  const salt = buffer.subarray(0, env.cryptoSaltLength)
-  const iv = buffer.subarray(env.cryptoSaltLength, env.cryptoSaltLength + env.cryptoIvLength)
+  const salt = buffer.subarray(0, env.saltLength)
+  const iv = buffer.subarray(env.saltLength, env.saltLength + env.ivLength)
   const tag = buffer.subarray(
-    env.cryptoSaltLength + env.cryptoIvLength,
-    env.cryptoSaltLength + env.cryptoIvLength + env.cryptoTagLength
+    env.saltLength + env.ivLength,
+    env.saltLength + env.ivLength + env.tagLength
   )
   const encrypted = buffer.subarray(
-    env.cryptoSaltLength + env.cryptoIvLength + env.cryptoTagLength
+    env.saltLength + env.ivLength + env.tagLength
   )
 
-  const key = deriveKey(masterPassword, salt, env.cryptoKeyLength, env.cryptoIterations)
+  const key = deriveKey(masterPassword, salt, env.keyLength, env.iterations)
 
-  const decipher = crypto.createDecipheriv(env.cryptoAlgorithm, key, iv) as crypto.DecipherGCM
+  const decipher = crypto.createDecipheriv(env.algorithm, key, iv) as crypto.DecipherGCM
   decipher.setAuthTag(tag)
 
   let decrypted = decipher.update(encrypted.toString('hex'), 'hex', 'utf8')

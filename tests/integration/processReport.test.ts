@@ -9,6 +9,7 @@
  */
 import * as dotenv from 'dotenv'
 import { processReport } from '../../src/services/notionService'
+import { NotionClient } from '../../src/clients/notionClient'
 
 dotenv.config()
 
@@ -22,7 +23,7 @@ describe('processReport（統合テスト）', () => {
   }
 
   it('Status=Doingのタスクを取得してTaskData[]に変換できる', async () => {
-    const result = await processReport(taskDatabaseId, notionToken)
+    const result = await processReport(taskDatabaseId, new NotionClient(notionToken))
 
     expect(result.length).toBeGreaterThan(0)
 

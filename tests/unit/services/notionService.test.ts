@@ -1,38 +1,27 @@
-import { Client } from '@notionhq/client'
+import type { Client } from '@notionhq/client'
 import type { BlockObjectResponse } from '@notionhq/client/build/src/api-endpoints'
 import { fetchTasks, fetchBlockChildren, processReport, fetchDailyNotes, processDailyNotes } from '../../../src/services/notionService'
 import { NotionAPIError, BlockFetchError } from '../../../src/utils/errors'
+import type { NotionClient } from '../../../src/clients/notionClient'
 
-jest.mock('@notionhq/client')
-
-const MockedClient = Client as jest.MockedClass<typeof Client>
+const makeNotionClient = (overrides: Partial<{ query: jest.Mock; listBlockChildren: jest.Mock }>): NotionClient => {
+  const query = overrides.query ?? jest.fn()
+  const listBlockChildren = overrides.listBlockChildren ?? jest.fn()
+  return {
+    inner: {
+      dataSources: { query },
+      blocks: { children: { list: listBlockChildren } },
+    } as unknown as Client,
+  }
+}
 
 describe('notionService', () => {
-  let mockQuery: jest.Mock
-  let mockListBlockChildren: jest.Mock
-
-  beforeEach(() => {
-    mockQuery = jest.fn()
-    mockListBlockChildren = jest.fn()
-
-    MockedClient.mockImplementation(
-      () =>
-        ({
-          dataSources: { query: mockQuery },
-          blocks: { children: { list: mockListBlockChildren } },
-        }) as unknown as Client
-    )
-  })
-
-  afterEach(() => {
-    jest.clearAllMocks()
-  })
-
   describe('fetchTasks', () => {
     it('Status=Doingのフィルタでデータベースをクエリする', async () => {
-      mockQuery.mockResolvedValue({ results: [] })
+      const mockQuery = jest.fn().mockResolvedValue({ results: [] })
+      const client = makeNotionClient({ query: mockQuery })
 
-      await fetchTasks('database-id-123', 'notion-token')
+      await fetchTasks('database-id-123', client)
 
       expect(mockQuery).toHaveBeenCalledWith({
         data_source_id: 'database-id-123',
@@ -52,26 +41,26 @@ describe('notionService', () => {
           'Date Created': { created_time: '2026-03-08T00:00:00.000Z' },
         },
       }
-      mockQuery.mockResolvedValue({ results: [notionTask] })
+      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [notionTask] }) })
 
-      const result = await fetchTasks('database-id-123', 'notion-token')
+      const result = await fetchTasks('database-id-123', client)
 
       expect(result).toHaveLength(1)
       expect(result[0]).toEqual(notionTask)
     })
 
     it('タスクが0件のときは空配列を返す', async () => {
-      mockQuery.mockResolvedValue({ results: [] })
+      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [] }) })
 
-      const result = await fetchTasks('database-id-123', 'notion-token')
+      const result = await fetchTasks('database-id-123', client)
 
       expect(result).toEqual([])
     })
 
     it('Notion APIがエラーを返したとき NotionAPIError をthrowする', async () => {
-      mockQuery.mockRejectedValue(new Error('Notion API error'))
+      const client = makeNotionClient({ query: jest.fn().mockRejectedValue(new Error('Notion API error')) })
 
-      await expect(fetchTasks('database-id-123', 'notion-token')).rejects.toThrow(NotionAPIError)
+      await expect(fetchTasks('database-id-123', client)).rejects.toThrow(NotionAPIError)
     })
   })
 
@@ -83,11 +72,12 @@ describe('notionService', () => {
         has_children: false,
         paragraph: { rich_text: [{ plain_text: 'テスト' }] },
       }
-      mockListBlockChildren.mockResolvedValue({ results: [paragraphBlock] })
+      const mockList = jest.fn().mockResolvedValue({ results: [paragraphBlock] })
+      const client = makeNotionClient({ listBlockChildren: mockList })
 
-      const result = await fetchBlockChildren('page-id-1', 'notion-token')
+      const result = await fetchBlockChildren('page-id-1', client)
 
-      expect(mockListBlockChildren).toHaveBeenCalledWith({ block_id: 'page-id-1' })
+      expect(mockList).toHaveBeenCalledWith({ block_id: 'page-id-1' })
       expect(result).toHaveLength(1)
       expect(result[0]).toMatchObject(paragraphBlock)
     })
@@ -95,60 +85,63 @@ describe('notionService', () => {
     it('has_children: true のブロックの子ブロックを再帰的に取得する', async () => {
       const childBlock = { id: 'child-1', type: 'bulleted_list_item', has_children: false }
       const parentBlock = { id: 'parent-1', type: 'to_do', has_children: true }
-
-      mockListBlockChildren
+      const mockList = jest.fn()
         .mockResolvedValueOnce({ results: [parentBlock] })
         .mockResolvedValueOnce({ results: [childBlock] })
+      const client = makeNotionClient({ listBlockChildren: mockList })
 
-      const result = await fetchBlockChildren('page-id-1', 'notion-token')
+      const result = await fetchBlockChildren('page-id-1', client)
 
-      expect(mockListBlockChildren).toHaveBeenCalledTimes(2)
-      expect(mockListBlockChildren).toHaveBeenNthCalledWith(2, { block_id: 'parent-1' })
+      expect(mockList).toHaveBeenCalledTimes(2)
+      expect(mockList).toHaveBeenNthCalledWith(2, { block_id: 'parent-1' })
       expect(result[0]).toMatchObject({ ...parentBlock, children: [expect.objectContaining(childBlock)] })
     })
 
     it('has_children: false のブロックは子を取得しない', async () => {
       const leafBlock = { id: 'leaf-1', type: 'paragraph', has_children: false }
-      mockListBlockChildren.mockResolvedValue({ results: [leafBlock] })
+      const mockList = jest.fn().mockResolvedValue({ results: [leafBlock] })
+      const client = makeNotionClient({ listBlockChildren: mockList })
 
-      await fetchBlockChildren('page-id-1', 'notion-token')
+      await fetchBlockChildren('page-id-1', client)
 
-      expect(mockListBlockChildren).toHaveBeenCalledTimes(1)
+      expect(mockList).toHaveBeenCalledTimes(1)
     })
 
     it('深さ2以上の入れ子を再帰的に取得する', async () => {
       const grandChildBlock = { id: 'grand-child-1', type: 'bulleted_list_item', has_children: false }
       const childBlock = { id: 'child-1', type: 'toggle', has_children: true }
       const parentBlock = { id: 'parent-1', type: 'to_do', has_children: true }
-
-      mockListBlockChildren
+      const mockList = jest.fn()
         .mockResolvedValueOnce({ results: [parentBlock] })
         .mockResolvedValueOnce({ results: [childBlock] })
         .mockResolvedValueOnce({ results: [grandChildBlock] })
+      const client = makeNotionClient({ listBlockChildren: mockList })
 
-      const result = await fetchBlockChildren('page-id-1', 'notion-token')
+      const result = await fetchBlockChildren('page-id-1', client)
 
-      expect(mockListBlockChildren).toHaveBeenCalledTimes(3)
+      expect(mockList).toHaveBeenCalledTimes(3)
       const child = result[0].children[0]
       expect(child).toMatchObject({ ...childBlock, children: [expect.objectContaining(grandChildBlock)] })
     })
 
     it('除外ブロックの子は取得しない', async () => {
       const codeBlock = { id: 'code-1', type: 'code', has_children: true }
-      mockListBlockChildren.mockResolvedValue({ results: [codeBlock] })
+      const mockList = jest.fn().mockResolvedValue({ results: [codeBlock] })
+      const client = makeNotionClient({ listBlockChildren: mockList })
 
-      const result = await fetchBlockChildren('page-id-1', 'notion-token')
+      const result = await fetchBlockChildren('page-id-1', client)
 
-      expect(mockListBlockChildren).toHaveBeenCalledTimes(1)
+      expect(mockList).toHaveBeenCalledTimes(1)
       expect(result).toHaveLength(0)
     })
 
     it('typeがcodeのブロックを除外する', async () => {
       const codeBlock = { id: 'block-code', type: 'code' }
       const paragraphBlock = { id: 'block-para', type: 'paragraph' }
-      mockListBlockChildren.mockResolvedValue({ results: [codeBlock, paragraphBlock] })
+      const mockList = jest.fn().mockResolvedValue({ results: [codeBlock, paragraphBlock] })
+      const client = makeNotionClient({ listBlockChildren: mockList })
 
-      const result = await fetchBlockChildren('page-id-1', 'notion-token')
+      const result = await fetchBlockChildren('page-id-1', client)
 
       expect(result).toHaveLength(1)
       expect((result[0] as BlockObjectResponse).type).toBe('paragraph')
@@ -157,9 +150,10 @@ describe('notionService', () => {
     it('typeがimageのブロックを除外する', async () => {
       const imageBlock = { id: 'block-image', type: 'image' }
       const paragraphBlock = { id: 'block-para', type: 'paragraph' }
-      mockListBlockChildren.mockResolvedValue({ results: [imageBlock, paragraphBlock] })
+      const mockList = jest.fn().mockResolvedValue({ results: [imageBlock, paragraphBlock] })
+      const client = makeNotionClient({ listBlockChildren: mockList })
 
-      const result = await fetchBlockChildren('page-id-1', 'notion-token')
+      const result = await fetchBlockChildren('page-id-1', client)
 
       expect(result).toHaveLength(1)
       expect((result[0] as BlockObjectResponse).type).toBe('paragraph')
@@ -173,9 +167,10 @@ describe('notionService', () => {
         { id: 'b4', type: 'to_do' },
         { id: 'b5', type: 'bulleted_list_item' },
       ]
-      mockListBlockChildren.mockResolvedValue({ results: blocks })
+      const mockList = jest.fn().mockResolvedValue({ results: blocks })
+      const client = makeNotionClient({ listBlockChildren: mockList })
 
-      const result = await fetchBlockChildren('page-id-1', 'notion-token')
+      const result = await fetchBlockChildren('page-id-1', client)
 
       expect(result).toHaveLength(2)
       expect(result.map((b) => (b as BlockObjectResponse).type)).toEqual([
@@ -185,25 +180,28 @@ describe('notionService', () => {
     })
 
     it('ブロックが0件のときは空配列を返す', async () => {
-      mockListBlockChildren.mockResolvedValue({ results: [] })
+      const mockList = jest.fn().mockResolvedValue({ results: [] })
+      const client = makeNotionClient({ listBlockChildren: mockList })
 
-      const result = await fetchBlockChildren('page-id-1', 'notion-token')
+      const result = await fetchBlockChildren('page-id-1', client)
 
       expect(result).toEqual([])
     })
 
     it('Notion APIがエラーを返したとき BlockFetchError をthrowする', async () => {
-      mockListBlockChildren.mockRejectedValue(new Error('Notion API error'))
+      const mockList = jest.fn().mockRejectedValue(new Error('Notion API error'))
+      const client = makeNotionClient({ listBlockChildren: mockList })
 
-      await expect(fetchBlockChildren('page-id-1', 'notion-token')).rejects.toThrow(BlockFetchError)
+      await expect(fetchBlockChildren('page-id-1', client)).rejects.toThrow(BlockFetchError)
     })
   })
 
   describe('processReport', () => {
-    it('fetchTasksをtaskDatabaseIdとnotionTokenで呼ぶ', async () => {
-      mockQuery.mockResolvedValue({ results: [] })
+    it('fetchTasksをtaskDatabaseIdとclientで呼ぶ', async () => {
+      const mockQuery = jest.fn().mockResolvedValue({ results: [] })
+      const client = makeNotionClient({ query: mockQuery })
 
-      await processReport('task-db-id', 'notion-token')
+      await processReport('task-db-id', client)
 
       expect(mockQuery).toHaveBeenCalledWith({
         data_source_id: 'task-db-id',
@@ -230,13 +228,14 @@ describe('notionService', () => {
           },
         },
       ]
-      mockQuery.mockResolvedValue({ results: tasks })
-      mockListBlockChildren.mockResolvedValue({ results: [] })
+      const mockQuery = jest.fn().mockResolvedValue({ results: tasks })
+      const mockList = jest.fn().mockResolvedValue({ results: [] })
+      const client = makeNotionClient({ query: mockQuery, listBlockChildren: mockList })
 
-      await processReport('task-db-id', 'notion-token')
+      await processReport('task-db-id', client)
 
-      expect(mockListBlockChildren).toHaveBeenCalledWith({ block_id: 'task-1' })
-      expect(mockListBlockChildren).toHaveBeenCalledWith({ block_id: 'task-2' })
+      expect(mockList).toHaveBeenCalledWith({ block_id: 'task-1' })
+      expect(mockList).toHaveBeenCalledWith({ block_id: 'task-2' })
     })
 
     it('TaskData[] を返す', async () => {
@@ -248,10 +247,12 @@ describe('notionService', () => {
           'Date Created': { created_time: '2026-03-08T00:00:00.000Z' },
         },
       }
-      mockQuery.mockResolvedValue({ results: [task] })
-      mockListBlockChildren.mockResolvedValue({ results: [] })
+      const client = makeNotionClient({
+        query: jest.fn().mockResolvedValue({ results: [task] }),
+        listBlockChildren: jest.fn().mockResolvedValue({ results: [] }),
+      })
 
-      const result = await processReport('task-db-id', 'notion-token')
+      const result = await processReport('task-db-id', client)
 
       expect(result).toHaveLength(1)
       expect(result[0]).toMatchObject({
@@ -263,17 +264,17 @@ describe('notionService', () => {
     })
 
     it('タスクが0件のとき空配列を返す', async () => {
-      mockQuery.mockResolvedValue({ results: [] })
+      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [] }) })
 
-      const result = await processReport('task-db-id', 'notion-token')
+      const result = await processReport('task-db-id', client)
 
       expect(result).toEqual([])
     })
 
     it('fetchTasksが失敗したときエラーをthrowする', async () => {
-      mockQuery.mockRejectedValue(new Error('Notion API error'))
+      const client = makeNotionClient({ query: jest.fn().mockRejectedValue(new Error('Notion API error')) })
 
-      await expect(processReport('task-db-id', 'notion-token')).rejects.toThrow(NotionAPIError)
+      await expect(processReport('task-db-id', client)).rejects.toThrow(NotionAPIError)
     })
   })
 
@@ -285,9 +286,10 @@ describe('notionService', () => {
     it('日付プロパティのフィルタでデータベースをクエリする', async () => {
       jest.useFakeTimers()
       jest.setSystemTime(new Date('2026-03-11T00:00:00.000Z'))
-      mockQuery.mockResolvedValue({ results: [] })
+      const mockQuery = jest.fn().mockResolvedValue({ results: [] })
+      const client = makeNotionClient({ query: mockQuery })
 
-      await fetchDailyNotes('daily-db-id', 'notion-token')
+      await fetchDailyNotes('daily-db-id', client)
 
       expect(mockQuery).toHaveBeenCalledWith({
         data_source_id: 'daily-db-id',
@@ -304,26 +306,26 @@ describe('notionService', () => {
         properties: { 日付: { date: { start: '2026-03-10' } } },
       }
       const invalidNote = { id: 'note-2', properties: {} }
-      mockQuery.mockResolvedValue({ results: [validNote, invalidNote] })
+      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [validNote, invalidNote] }) })
 
-      const result = await fetchDailyNotes('daily-db-id', 'notion-token')
+      const result = await fetchDailyNotes('daily-db-id', client)
 
       expect(result).toHaveLength(1)
       expect(result[0]).toEqual(validNote)
     })
 
     it('ノートが0件のとき空配列を返す', async () => {
-      mockQuery.mockResolvedValue({ results: [] })
+      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [] }) })
 
-      const result = await fetchDailyNotes('daily-db-id', 'notion-token')
+      const result = await fetchDailyNotes('daily-db-id', client)
 
       expect(result).toEqual([])
     })
 
     it('Notion APIがエラーを返したとき NotionAPIError をthrowする', async () => {
-      mockQuery.mockRejectedValue(new Error('Notion API error'))
+      const client = makeNotionClient({ query: jest.fn().mockRejectedValue(new Error('Notion API error')) })
 
-      await expect(fetchDailyNotes('daily-db-id', 'notion-token')).rejects.toThrow(NotionAPIError)
+      await expect(fetchDailyNotes('daily-db-id', client)).rejects.toThrow(NotionAPIError)
     })
   })
 
@@ -333,12 +335,13 @@ describe('notionService', () => {
         id: 'note-1',
         properties: { 日付: { date: { start: '2026-03-10' } } },
       }
-      mockQuery.mockResolvedValue({ results: [note] })
-      mockListBlockChildren.mockResolvedValue({ results: [] })
+      const mockQuery = jest.fn().mockResolvedValue({ results: [note] })
+      const mockList = jest.fn().mockResolvedValue({ results: [] })
+      const client = makeNotionClient({ query: mockQuery, listBlockChildren: mockList })
 
-      await processDailyNotes('daily-db-id', 'notion-token')
+      await processDailyNotes('daily-db-id', client)
 
-      expect(mockListBlockChildren).toHaveBeenCalledWith({ block_id: 'note-1' })
+      expect(mockList).toHaveBeenCalledWith({ block_id: 'note-1' })
     })
 
     it('DailyNoteData[] を返す', async () => {
@@ -346,10 +349,12 @@ describe('notionService', () => {
         id: 'note-1',
         properties: { 日付: { date: { start: '2026-03-10' } } },
       }
-      mockQuery.mockResolvedValue({ results: [note] })
-      mockListBlockChildren.mockResolvedValue({ results: [] })
+      const client = makeNotionClient({
+        query: jest.fn().mockResolvedValue({ results: [note] }),
+        listBlockChildren: jest.fn().mockResolvedValue({ results: [] }),
+      })
 
-      const result = await processDailyNotes('daily-db-id', 'notion-token')
+      const result = await processDailyNotes('daily-db-id', client)
 
       expect(result).toHaveLength(1)
       expect(result[0]).toMatchObject({
@@ -362,17 +367,17 @@ describe('notionService', () => {
     })
 
     it('ノートが0件のとき空配列を返す', async () => {
-      mockQuery.mockResolvedValue({ results: [] })
+      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [] }) })
 
-      const result = await processDailyNotes('daily-db-id', 'notion-token')
+      const result = await processDailyNotes('daily-db-id', client)
 
       expect(result).toEqual([])
     })
 
     it('fetchDailyNotes が失敗したときエラーをthrowする', async () => {
-      mockQuery.mockRejectedValue(new Error('Notion API error'))
+      const client = makeNotionClient({ query: jest.fn().mockRejectedValue(new Error('Notion API error')) })
 
-      await expect(processDailyNotes('daily-db-id', 'notion-token')).rejects.toThrow(NotionAPIError)
+      await expect(processDailyNotes('daily-db-id', client)).rejects.toThrow(NotionAPIError)
     })
   })
 })

@@ -23,6 +23,24 @@ const requireEnv = (key: string): string => {
 
 const requireEnvInt = (key: string): number => parseInt(requireEnv(key), 10)
 
+export interface CryptoConfig {
+  algorithm: string
+  ivLength: number
+  saltLength: number
+  tagLength: number
+  keyLength: number
+  iterations: number
+}
+
+export const getCryptoConfig = (): CryptoConfig => ({
+  algorithm: requireEnv('CRYPTO_ALGORITHM'),
+  ivLength: requireEnvInt('CRYPTO_IV_LENGTH'),
+  saltLength: requireEnvInt('CRYPTO_SALT_LENGTH'),
+  tagLength: requireEnvInt('CRYPTO_TAG_LENGTH'),
+  keyLength: requireEnvInt('CRYPTO_KEY_LENGTH'),
+  iterations: requireEnvInt('CRYPTO_ITERATIONS'),
+})
+
 export const getEnvironment = (): Environment => ({
   secretToken: requireEnv('SECRET_TOKEN'),
   masterPassword: requireEnv('MASTER_PW'),

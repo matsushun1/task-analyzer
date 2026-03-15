@@ -7,11 +7,11 @@ import {
   fetchDailyNotes,
   processDailyNotes,
   fetchDoTodayTasksPageId,
-  appendTodayTasksToPage,
+  appendReportToPage,
 } from '../../../services/notionService'
 import { NotionAPIError, BlockFetchError } from '../../../utils/errors'
 import type { NotionClient } from '../../../clients/notionClient'
-import type { TodayTask } from '../../../models/types/analysis.types'
+import type { ClaudeAnalysisResult } from '../../../models/types/analysis.types'
 
 const makeNotionClient = (overrides: Partial<{ query: jest.Mock; listBlockChildren: jest.Mock }>): NotionClient => {
   const query = overrides.query ?? jest.fn()
@@ -437,7 +437,7 @@ describe('notionService', () => {
     })
   })
 
-  describe('appendTodayTasksToPage', () => {
+  describe('appendReportToPage', () => {
     const makeClientWithAppend = (appendMock: jest.Mock): NotionClient => ({
       inner: {
         dataSources: { query: jest.fn() },
@@ -450,31 +450,44 @@ describe('notionService', () => {
       } as unknown as Client,
     })
 
-    it('指定したページIDにブロックを追加する', async () => {
+    const baseResult: ClaudeAnalysisResult = {
+      firstTask: { name: 'タスクA', firstStep: '最初のステップ' },
+      todayTasks: [{ name: 'タスクA', deadline: '3/20', reason: '期限が過ぎています' }],
+      overdueTasks: [{ name: '期限切れタスク', deadline: '3/10' }],
+      healthAdvice: '体調は良好です',
+      taskManagementAdvice: 'タスクを整理しましょう',
+    }
+
+    it('指定したページIDに blocks.children.append を呼ぶ', async () => {
       const mockAppend = jest.fn().mockResolvedValue({})
       const client = makeClientWithAppend(mockAppend)
-      const todayTasks: TodayTask[] = [{ name: 'タスクA', reason: '期限が今日です' }]
 
-      await appendTodayTasksToPage('page-id-1', todayTasks, client)
+      await appendReportToPage('page-id-1', baseResult, client)
 
       expect(mockAppend).toHaveBeenCalledWith(
         expect.objectContaining({ block_id: 'page-id-1' })
       )
     })
 
-    it('各タスクを番号付きリストブロックとして追加する', async () => {
+    it('todayTasks が numbered_list_item として書き込まれる', async () => {
       const mockAppend = jest.fn().mockResolvedValue({})
       const client = makeClientWithAppend(mockAppend)
-      const todayTasks: TodayTask[] = [
-        { name: 'タスクA', deadline: '3/20', reason: '期限が過ぎています' },
-        { name: 'タスクB', reason: '優先度が高い' },
-      ]
+      const result: ClaudeAnalysisResult = {
+        ...baseResult,
+        todayTasks: [
+          { name: 'タスクA', deadline: '3/20', reason: '期限が過ぎています' },
+          { name: 'タスクB', reason: '優先度が高い' },
+        ],
+      }
 
-      await appendTodayTasksToPage('page-id-1', todayTasks, client)
+      await appendReportToPage('page-id-1', result, client)
 
       const call = mockAppend.mock.calls[0][0] as { children: unknown[] }
-      expect(call.children).toHaveLength(2)
-      expect(call.children[0]).toMatchObject({
+      const numberedItems = (call.children as Array<{ type: string }>).filter(
+        (b) => b.type === 'numbered_list_item'
+      )
+      expect(numberedItems).toHaveLength(2)
+      expect(numberedItems[0]).toMatchObject({
         type: 'numbered_list_item',
         numbered_list_item: {
           rich_text: [expect.objectContaining({ text: expect.objectContaining({ content: expect.stringContaining('タスクA') }) })],
@@ -482,21 +495,89 @@ describe('notionService', () => {
       })
     })
 
-    it('タスクリストが空のとき append を呼ばない', async () => {
+    it('overdueTasks が bulleted_list_item として書き込まれる', async () => {
+      const mockAppend = jest.fn().mockResolvedValue({})
+      const client = makeClientWithAppend(mockAppend)
+      const result: ClaudeAnalysisResult = {
+        ...baseResult,
+        overdueTasks: [
+          { name: '期限切れタスクX', deadline: '3/10' },
+          { name: '期限切れタスクY', deadline: '3/12' },
+        ],
+      }
+
+      await appendReportToPage('page-id-1', result, client)
+
+      const call = mockAppend.mock.calls[0][0] as { children: unknown[] }
+      const bulletedItems = (call.children as Array<{ type: string }>).filter(
+        (b) => b.type === 'bulleted_list_item'
+      )
+      expect(bulletedItems).toHaveLength(2)
+      expect(bulletedItems[0]).toMatchObject({
+        type: 'bulleted_list_item',
+        bulleted_list_item: {
+          rich_text: [expect.objectContaining({ text: expect.objectContaining({ content: expect.stringContaining('期限切れタスクX') }) })],
+        },
+      })
+    })
+
+    it('overdueTasks が空のとき「なし」の paragraph が書き込まれる', async () => {
+      const mockAppend = jest.fn().mockResolvedValue({})
+      const client = makeClientWithAppend(mockAppend)
+      const result: ClaudeAnalysisResult = {
+        ...baseResult,
+        overdueTasks: [],
+      }
+
+      await appendReportToPage('page-id-1', result, client)
+
+      const call = mockAppend.mock.calls[0][0] as { children: unknown[] }
+      const paragraphs = (call.children as Array<{ type: string; paragraph?: { rich_text: Array<{ text: { content: string } }> } }>).filter(
+        (b) => b.type === 'paragraph'
+      )
+      const noneparagraph = paragraphs.find(
+        (b) => b.paragraph?.rich_text[0]?.text.content === 'なし'
+      )
+      expect(noneparagraph).toBeDefined()
+    })
+
+    it('healthAdvice が paragraph として書き込まれる', async () => {
       const mockAppend = jest.fn().mockResolvedValue({})
       const client = makeClientWithAppend(mockAppend)
 
-      await appendTodayTasksToPage('page-id-1', [], client)
+      await appendReportToPage('page-id-1', baseResult, client)
 
-      expect(mockAppend).not.toHaveBeenCalled()
+      const call = mockAppend.mock.calls[0][0] as { children: unknown[] }
+      const paragraphs = (call.children as Array<{ type: string; paragraph?: { rich_text: Array<{ text: { content: string } }> } }>).filter(
+        (b) => b.type === 'paragraph'
+      )
+      const healthParagraph = paragraphs.find(
+        (b) => b.paragraph?.rich_text[0]?.text.content === '体調は良好です'
+      )
+      expect(healthParagraph).toBeDefined()
+    })
+
+    it('taskManagementAdvice が paragraph として書き込まれる', async () => {
+      const mockAppend = jest.fn().mockResolvedValue({})
+      const client = makeClientWithAppend(mockAppend)
+
+      await appendReportToPage('page-id-1', baseResult, client)
+
+      const call = mockAppend.mock.calls[0][0] as { children: unknown[] }
+      const paragraphs = (call.children as Array<{ type: string; paragraph?: { rich_text: Array<{ text: { content: string } }> } }>).filter(
+        (b) => b.type === 'paragraph'
+      )
+      const adviceParagraph = paragraphs.find(
+        (b) => b.paragraph?.rich_text[0]?.text.content === 'タスクを整理しましょう'
+      )
+      expect(adviceParagraph).toBeDefined()
     })
 
     it('Notion APIがエラーを返したとき NotionAPIError をthrowする', async () => {
       const mockAppend = jest.fn().mockRejectedValue(new Error('Notion API error'))
       const client = makeClientWithAppend(mockAppend)
-      const todayTasks: TodayTask[] = [{ name: 'タスクA', reason: '期限が今日' }]
 
-      await expect(appendTodayTasksToPage('page-id-1', todayTasks, client)).rejects.toThrow(NotionAPIError)
+      await expect(appendReportToPage('page-id-1', baseResult, client)).rejects.toThrow(NotionAPIError)
     })
   })
 })

@@ -1,8 +1,17 @@
 import type { Client } from '@notionhq/client'
 import type { BlockObjectResponse } from '@notionhq/client/build/src/api-endpoints'
-import { fetchTasks, fetchBlockChildren, processReport, fetchDailyNotes, processDailyNotes } from '../../../src/services/notionService'
+import {
+  fetchTasks,
+  fetchBlockChildren,
+  processReport,
+  fetchDailyNotes,
+  processDailyNotes,
+  fetchDoTodayTasksPageId,
+  appendTodayTasksToPage,
+} from '../../../src/services/notionService'
 import { NotionAPIError, BlockFetchError } from '../../../src/utils/errors'
 import type { NotionClient } from '../../../src/clients/notionClient'
+import type { TodayTask } from '../../../src/models/types/analysis.types'
 
 const makeNotionClient = (overrides: Partial<{ query: jest.Mock; listBlockChildren: jest.Mock }>): NotionClient => {
   const query = overrides.query ?? jest.fn()
@@ -378,6 +387,116 @@ describe('notionService', () => {
       const client = makeNotionClient({ query: jest.fn().mockRejectedValue(new Error('Notion API error')) })
 
       await expect(processDailyNotes('daily-db-id', client)).rejects.toThrow(NotionAPIError)
+    })
+  })
+
+  describe('fetchDoTodayTasksPageId', () => {
+    it('Status=DoTodayのフィルタでデータベースをクエリする', async () => {
+      const mockQuery = jest.fn().mockResolvedValue({ results: [] })
+      const client = makeNotionClient({ query: mockQuery })
+
+      await fetchDoTodayTasksPageId('database-id-123', client)
+
+      expect(mockQuery).toHaveBeenCalledWith({
+        data_source_id: 'database-id-123',
+        filter: {
+          property: 'Status',
+          select: { equals: 'DoToday' },
+        },
+      })
+    })
+
+    it('最初のページのIDを返す', async () => {
+      const task = {
+        id: 'do-today-page-id',
+        properties: {
+          Name: { title: [{ plain_text: '今日のタスク' }] },
+          Status: { select: { name: 'DoToday' } },
+          'Date Created': { created_time: '2026-03-15T00:00:00.000Z' },
+        },
+      }
+      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [task] }) })
+
+      const result = await fetchDoTodayTasksPageId('database-id-123', client)
+
+      expect(result).toBe('do-today-page-id')
+    })
+
+    it('DoTodayページが存在しないとき null を返す', async () => {
+      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [] }) })
+
+      const result = await fetchDoTodayTasksPageId('database-id-123', client)
+
+      expect(result).toBeNull()
+    })
+
+    it('Notion APIがエラーを返したとき NotionAPIError をthrowする', async () => {
+      const client = makeNotionClient({ query: jest.fn().mockRejectedValue(new Error('Notion API error')) })
+
+      await expect(fetchDoTodayTasksPageId('database-id-123', client)).rejects.toThrow(NotionAPIError)
+    })
+  })
+
+  describe('appendTodayTasksToPage', () => {
+    const makeClientWithAppend = (appendMock: jest.Mock): NotionClient => ({
+      inner: {
+        dataSources: { query: jest.fn() },
+        blocks: {
+          children: {
+            list: jest.fn(),
+            append: appendMock,
+          },
+        },
+      } as unknown as Client,
+    })
+
+    it('指定したページIDにブロックを追加する', async () => {
+      const mockAppend = jest.fn().mockResolvedValue({})
+      const client = makeClientWithAppend(mockAppend)
+      const todayTasks: TodayTask[] = [{ name: 'タスクA', reason: '期限が今日です' }]
+
+      await appendTodayTasksToPage('page-id-1', todayTasks, client)
+
+      expect(mockAppend).toHaveBeenCalledWith(
+        expect.objectContaining({ block_id: 'page-id-1' })
+      )
+    })
+
+    it('各タスクを番号付きリストブロックとして追加する', async () => {
+      const mockAppend = jest.fn().mockResolvedValue({})
+      const client = makeClientWithAppend(mockAppend)
+      const todayTasks: TodayTask[] = [
+        { name: 'タスクA', deadline: '3/20', reason: '期限が過ぎています' },
+        { name: 'タスクB', reason: '優先度が高い' },
+      ]
+
+      await appendTodayTasksToPage('page-id-1', todayTasks, client)
+
+      const call = mockAppend.mock.calls[0][0] as { children: unknown[] }
+      expect(call.children).toHaveLength(2)
+      expect(call.children[0]).toMatchObject({
+        type: 'numbered_list_item',
+        numbered_list_item: {
+          rich_text: [expect.objectContaining({ text: expect.objectContaining({ content: expect.stringContaining('タスクA') }) })],
+        },
+      })
+    })
+
+    it('タスクリストが空のとき append を呼ばない', async () => {
+      const mockAppend = jest.fn().mockResolvedValue({})
+      const client = makeClientWithAppend(mockAppend)
+
+      await appendTodayTasksToPage('page-id-1', [], client)
+
+      expect(mockAppend).not.toHaveBeenCalled()
+    })
+
+    it('Notion APIがエラーを返したとき NotionAPIError をthrowする', async () => {
+      const mockAppend = jest.fn().mockRejectedValue(new Error('Notion API error'))
+      const client = makeClientWithAppend(mockAppend)
+      const todayTasks: TodayTask[] = [{ name: 'タスクA', reason: '期限が今日' }]
+
+      await expect(appendTodayTasksToPage('page-id-1', todayTasks, client)).rejects.toThrow(NotionAPIError)
     })
   })
 })

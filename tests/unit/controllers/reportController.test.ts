@@ -30,6 +30,7 @@ describe('generateDailyReport', () => {
   beforeEach(() => {
     mockVerifySecret.mockReturnValue(true)
     mockGenerateDailyReportUseCase.mockResolvedValue({
+      firstTask: { name: '', firstStep: '' },
       todayTasks: [],
       overdueTasks: [],
       healthAdvice: '',

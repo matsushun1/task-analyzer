@@ -1,3 +1,8 @@
+export interface FirstTask {
+  name: string
+  firstStep: string
+}
+
 export interface TodayTask {
   name: string
   deadline?: string
@@ -10,10 +15,19 @@ export interface OverdueTask {
 }
 
 export interface ClaudeAnalysisResult {
+  firstTask: FirstTask
   todayTasks: TodayTask[]
   overdueTasks: OverdueTask[]
   healthAdvice: string
   taskManagementAdvice: string
+}
+
+const isFirstTask = (item: unknown): item is FirstTask => {
+  if (typeof item !== 'object' || item === null) return false
+  const obj = item as Record<string, unknown>
+  if (typeof obj['name'] !== 'string') return false
+  if (typeof obj['firstStep'] !== 'string') return false
+  return true
 }
 
 const isTodayTask = (item: unknown): item is TodayTask => {
@@ -36,6 +50,8 @@ const isOverdueTask = (item: unknown): item is OverdueTask => {
 export const isClaudeAnalysisResult = (value: unknown): value is ClaudeAnalysisResult => {
   if (typeof value !== 'object' || value === null) return false
   const obj = value as Record<string, unknown>
+
+  if (!isFirstTask(obj['firstTask'])) return false
 
   if (!Array.isArray(obj['todayTasks'])) return false
   if (!obj['todayTasks'].every(isTodayTask)) return false

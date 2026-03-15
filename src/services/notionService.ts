@@ -5,7 +5,7 @@ import { buildTaskData } from '../models/task.model'
 import type { BlockWithChildren } from '../models/types/block.types'
 import { isNotionDailyNote, type DailyNoteData, type NotionDailyNote } from '../models/types/dailyNote.types'
 import { isNotionTask, type NotionTask, type TaskData } from '../models/types/task.types'
-import type { TodayTask } from '../models/types/analysis.types'
+import type { ClaudeAnalysisResult } from '../models/types/analysis.types'
 import { BlockFetchError, NotionAPIError } from '../utils/errors'
 import type { NotionClient } from '../clients/notionClient'
 
@@ -105,29 +105,71 @@ export const fetchDoTodayTasksPageId = async (databaseId: string, client: Notion
   }
 }
 
-export const appendTodayTasksToPage = async (
+export const appendReportToPage = async (
   pageId: string,
-  todayTasks: TodayTask[],
+  result: ClaudeAnalysisResult,
   client: NotionClient
 ): Promise<void> => {
-  if (todayTasks.length === 0) return
+  const richText = (content: string): AppendBlockChildrenParameters['children'][number] & {
+    type: 'paragraph'
+  } => ({
+    type: 'paragraph' as const,
+    paragraph: { rich_text: [{ type: 'text' as const, text: { content } }] },
+  })
 
-  const children: AppendBlockChildrenParameters['children'] = todayTasks.map((task) => {
+  const heading = (content: string): AppendBlockChildrenParameters['children'][number] => ({
+    type: 'heading_2' as const,
+    heading_2: { rich_text: [{ type: 'text' as const, text: { content } }] },
+  })
+
+  const divider = (): AppendBlockChildrenParameters['children'][number] => ({
+    type: 'divider' as const,
+    divider: {},
+  })
+
+  const todayTaskBlocks: AppendBlockChildrenParameters['children'] = result.todayTasks.map((task) => {
     const content = task.deadline ? `${task.name} (期限: ${task.deadline})` : task.name
     return {
       type: 'numbered_list_item' as const,
       numbered_list_item: {
         rich_text: [{ type: 'text' as const, text: { content } }],
+        children: [
+          {
+            type: 'bulleted_list_item' as const,
+            bulleted_list_item: {
+              rich_text: [{ type: 'text' as const, text: { content: task.reason } }],
+            },
+          },
+        ],
       },
     }
   })
 
+  const overdueTaskBlocks: AppendBlockChildrenParameters['children'] = result.overdueTasks.map((task) => ({
+    type: 'bulleted_list_item' as const,
+    bulleted_list_item: {
+      rich_text: [{ type: 'text' as const, text: { content: `${task.name} - 期限: ${task.deadline}` } }],
+    },
+  }))
+
+  const children: AppendBlockChildrenParameters['children'] = [
+    divider(),
+    heading('🎯 今日やるべきタスク'),
+    ...todayTaskBlocks,
+    divider(),
+    heading('⚠️ 期限切れタスク'),
+    ...(result.overdueTasks.length > 0 ? overdueTaskBlocks : [richText('なし')]),
+    divider(),
+    heading('💪 体調アドバイス'),
+    richText(result.healthAdvice),
+    divider(),
+    heading('📝 タスク管理アドバイス'),
+    richText(result.taskManagementAdvice),
+  ]
+
   try {
-    await client.inner.blocks.children.append({
-      block_id: pageId,
-      children,
-    })
+    await client.inner.blocks.children.append({ block_id: pageId, children })
   } catch (error) {
-    throw new NotionAPIError('Failed to append today tasks to page', error)
+    throw new NotionAPIError('Failed to append report to page', error)
   }
 }

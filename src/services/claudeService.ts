@@ -6,6 +6,8 @@ import { ClaudeAPIError } from '../utils/errors'
 import { logger } from '../utils/logger'
 import type { ClaudeClient } from '../clients/claudeClient'
 
+// SYSTEM_PROMPT: Claudeの振る舞い・スタイル・ロール定義
+// buildPrompt: 出力フォーマット・データ固有の分析条件
 const SYSTEM_PROMPT = `あなたはADHDを持つWebエンジニアの認知特性を熟知したタスク管理コーチです。
 ユーザーは優先順位付け・時間感覚・先延ばしに困難を抱えることがある一方、適切なサポートがあれば高いパフォーマンスを発揮できます。
 以下の原則でフィードバックを生成してください:

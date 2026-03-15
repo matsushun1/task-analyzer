@@ -1,4 +1,4 @@
-import { processReport, processDailyNotes, fetchDoTodayTasksPageId, appendTodayTasksToPage } from '../services/notionService'
+import { processReport, processDailyNotes, fetchDoTodayTasksPageId, appendReportToPage } from '../services/notionService'
 import { analyzeTasksAndNotes } from '../services/claudeService'
 import type { ClaudeAnalysisResult } from '../models/types/analysis.types'
 import { getEnvironment } from '../config/environment'
@@ -17,7 +17,7 @@ export const generateDailyReportUseCase = async (): Promise<ClaudeAnalysisResult
 
   const doTodayPageId = await fetchDoTodayTasksPageId(env.notionTaskDatabaseId, notionClient)
   if (doTodayPageId !== null) {
-    await appendTodayTasksToPage(doTodayPageId, analysisResult.todayTasks, notionClient)
+    await appendReportToPage(doTodayPageId, analysisResult, notionClient)
   }
 
   return analysisResult

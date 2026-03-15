@@ -22,8 +22,8 @@ const mockAnalyzeTasksAndNotes = claudeService.analyzeTasksAndNotes as jest.Mock
 const mockFetchDoTodayTasksPageId = notionService.fetchDoTodayTasksPageId as jest.MockedFunction<
   typeof notionService.fetchDoTodayTasksPageId
 >
-const mockAppendTodayTasksToPage = notionService.appendTodayTasksToPage as jest.MockedFunction<
-  typeof notionService.appendTodayTasksToPage
+const mockAppendReportToPage = notionService.appendReportToPage as jest.MockedFunction<
+  typeof notionService.appendReportToPage
 >
 const mockGetEnvironment = environment.getEnvironment as jest.MockedFunction<typeof environment.getEnvironment>
 const MockNotionClient = NotionClient as jest.MockedClass<typeof NotionClient>
@@ -59,7 +59,7 @@ describe('generateDailyReportUseCase', () => {
     mockProcessDailyNotes.mockResolvedValue([])
     mockAnalyzeTasksAndNotes.mockResolvedValue(validAnalysisResult)
     mockFetchDoTodayTasksPageId.mockResolvedValue('do-today-page-id')
-    mockAppendTodayTasksToPage.mockResolvedValue(undefined)
+    mockAppendReportToPage.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -120,31 +120,31 @@ describe('generateDailyReportUseCase', () => {
     expect(mockFetchDoTodayTasksPageId).toHaveBeenCalledWith('task-db-id', expect.any(NotionClient))
   })
 
-  it('DoTodayページが存在するとき appendTodayTasksToPage を分析結果の todayTasks で呼ぶ', async () => {
+  it('DoTodayページが存在するとき appendReportToPage を分析結果全体（ClaudeAnalysisResult）で呼ぶ', async () => {
     const analysisResult: ClaudeAnalysisResult = {
       firstTask: { name: 'タスクA', firstStep: 'ファイルを開く' },
       todayTasks: [{ name: 'タスクA', reason: '期限が今日' }],
       overdueTasks: [],
-      healthAdvice: '',
-      taskManagementAdvice: '',
+      healthAdvice: '体調良好',
+      taskManagementAdvice: 'タスクを整理しましょう',
     }
     mockAnalyzeTasksAndNotes.mockResolvedValue(analysisResult)
     mockFetchDoTodayTasksPageId.mockResolvedValue('do-today-page-id')
 
     await generateDailyReportUseCase()
 
-    expect(mockAppendTodayTasksToPage).toHaveBeenCalledWith(
+    expect(mockAppendReportToPage).toHaveBeenCalledWith(
       'do-today-page-id',
-      analysisResult.todayTasks,
+      analysisResult,
       expect.any(NotionClient)
     )
   })
 
-  it('DoTodayページが存在しないとき appendTodayTasksToPage を呼ばない', async () => {
+  it('DoTodayページが存在しないとき appendReportToPage を呼ばない', async () => {
     mockFetchDoTodayTasksPageId.mockResolvedValue(null)
 
     await generateDailyReportUseCase()
 
-    expect(mockAppendTodayTasksToPage).not.toHaveBeenCalled()
+    expect(mockAppendReportToPage).not.toHaveBeenCalled()
   })
 })

@@ -6,18 +6,7 @@ module.exports = {
   roots: ['<rootDir>/src/tests'],
   testMatch: ['**/*.test.ts'],
   transform: {
-    '^.+\\.ts$': [
-      'ts-jest',
-      {
-        tsconfig: {
-          rootDir: '.',
-          strict: true,
-          module: 'commonjs',
-          target: 'ES2020',
-          types: ['jest', 'node'],
-        },
-      },
-    ],
+    '^.+\\.ts$': ['ts-jest', { tsconfig: './src/tests/tsconfig.json' }],
   },
   collectCoverageFrom: ['src/**/*.ts', '!src/index.ts'],
   coverageDirectory: 'coverage',

@@ -1,23 +1,33 @@
-// 環境変数を設定（テスト用）
-process.env.SECRET_TOKEN = 'my-secret-token'
-process.env.MASTER_PW = 'secure-master-password'
-process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
-process.env.NOTION_TOKEN = 'test-notion-token'
-process.env.NOTION_DAILY_NOTE_DB_ID = 'test-daily-note-db-id'
-process.env.NOTION_TASK_DB_ID = 'test-task-db-id'
-process.env.CRYPTO_ALGORITHM = 'aes-256-gcm'
-process.env.CRYPTO_IV_LENGTH = '16'
-process.env.CRYPTO_SALT_LENGTH = '64'
-process.env.CRYPTO_TAG_LENGTH = '16'
-process.env.CRYPTO_KEY_LENGTH = '32'
-process.env.CRYPTO_ITERATIONS = '100000'
-
 import { encrypt } from '../../../utils/cryptoApiKey'
 import { verifySecret } from '../../../services/authService'
 
 describe('authService', () => {
   const masterPassword = 'secure-master-password'
   const secretToken = 'my-secret-token'
+
+  const originalEnv = process.env
+
+  beforeAll(() => {
+    process.env = {
+      ...originalEnv,
+      SECRET_TOKEN: secretToken,
+      MASTER_PW: masterPassword,
+      ANTHROPIC_API_KEY: 'test-anthropic-key',
+      NOTION_TOKEN: 'test-notion-token',
+      NOTION_DAILY_NOTE_DB_ID: 'test-daily-note-db-id',
+      NOTION_TASK_DB_ID: 'test-task-db-id',
+      CRYPTO_ALGORITHM: 'aes-256-gcm',
+      CRYPTO_IV_LENGTH: '16',
+      CRYPTO_SALT_LENGTH: '64',
+      CRYPTO_TAG_LENGTH: '16',
+      CRYPTO_KEY_LENGTH: '32',
+      CRYPTO_ITERATIONS: '100000',
+    }
+  })
+
+  afterAll(() => {
+    process.env = originalEnv
+  })
 
   describe('verifySecret', () => {
     it('正しい認証情報の場合 true を返す', () => {

@@ -4,6 +4,7 @@ import * as claudeService from '../../../src/services/claudeService'
 import * as environment from '../../../src/config/environment'
 import { NotionClient } from '../../../src/clients/notionClient'
 import { ClaudeClient } from '../../../src/clients/claudeClient'
+import type { ClaudeAnalysisResult } from '../../../src/models/types/analysis.types'
 
 jest.mock('../../../src/services/notionService')
 jest.mock('../../../src/services/claudeService')
@@ -18,11 +19,18 @@ const mockProcessDailyNotes = notionService.processDailyNotes as jest.MockedFunc
 const mockAnalyzeTasksAndNotes = claudeService.analyzeTasksAndNotes as jest.MockedFunction<
   typeof claudeService.analyzeTasksAndNotes
 >
+const mockFetchDoTodayTasksPageId = notionService.fetchDoTodayTasksPageId as jest.MockedFunction<
+  typeof notionService.fetchDoTodayTasksPageId
+>
+const mockAppendTodayTasksToPage = notionService.appendTodayTasksToPage as jest.MockedFunction<
+  typeof notionService.appendTodayTasksToPage
+>
 const mockGetEnvironment = environment.getEnvironment as jest.MockedFunction<typeof environment.getEnvironment>
 const MockNotionClient = NotionClient as jest.MockedClass<typeof NotionClient>
 const MockClaudeClient = ClaudeClient as jest.MockedClass<typeof ClaudeClient>
 
-const validAnalysisResult = {
+const validAnalysisResult: ClaudeAnalysisResult = {
+  firstTask: { name: '', firstStep: '' },
   todayTasks: [],
   overdueTasks: [],
   healthAdvice: '',
@@ -50,6 +58,8 @@ describe('generateDailyReportUseCase', () => {
     mockProcessReport.mockResolvedValue([])
     mockProcessDailyNotes.mockResolvedValue([])
     mockAnalyzeTasksAndNotes.mockResolvedValue(validAnalysisResult)
+    mockFetchDoTodayTasksPageId.mockResolvedValue('do-today-page-id')
+    mockAppendTodayTasksToPage.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -102,5 +112,39 @@ describe('generateDailyReportUseCase', () => {
     const result = await generateDailyReportUseCase()
 
     expect(result).toEqual(validAnalysisResult)
+  })
+
+  it('分析後に fetchDoTodayTasksPageId を taskDatabaseId で呼ぶ', async () => {
+    await generateDailyReportUseCase()
+
+    expect(mockFetchDoTodayTasksPageId).toHaveBeenCalledWith('task-db-id', expect.any(NotionClient))
+  })
+
+  it('DoTodayページが存在するとき appendTodayTasksToPage を分析結果の todayTasks で呼ぶ', async () => {
+    const analysisResult: ClaudeAnalysisResult = {
+      firstTask: { name: 'タスクA', firstStep: 'ファイルを開く' },
+      todayTasks: [{ name: 'タスクA', reason: '期限が今日' }],
+      overdueTasks: [],
+      healthAdvice: '',
+      taskManagementAdvice: '',
+    }
+    mockAnalyzeTasksAndNotes.mockResolvedValue(analysisResult)
+    mockFetchDoTodayTasksPageId.mockResolvedValue('do-today-page-id')
+
+    await generateDailyReportUseCase()
+
+    expect(mockAppendTodayTasksToPage).toHaveBeenCalledWith(
+      'do-today-page-id',
+      analysisResult.todayTasks,
+      expect.any(NotionClient)
+    )
+  })
+
+  it('DoTodayページが存在しないとき appendTodayTasksToPage を呼ばない', async () => {
+    mockFetchDoTodayTasksPageId.mockResolvedValue(null)
+
+    await generateDailyReportUseCase()
+
+    expect(mockAppendTodayTasksToPage).not.toHaveBeenCalled()
   })
 })

@@ -27,6 +27,7 @@ const sampleNotes: DailyNoteData[] = [
 ]
 
 const validAnalysisResult = {
+  firstTask: { name: 'テストタスク', firstStep: 'ファイルを開く' },
   todayTasks: [{ name: 'テストタスク', deadline: '3/10', reason: '期限が近い' }],
   overdueTasks: [],
   healthAdvice: '健康状態は良好です。引き続き規則正しい生活を心がけましょう。',

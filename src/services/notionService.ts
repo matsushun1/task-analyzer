@@ -5,6 +5,7 @@ import { buildTaskData } from '../models/task.model'
 import type { BlockWithChildren } from '../models/types/block.types'
 import { isNotionDailyNote, type DailyNoteData, type NotionDailyNote } from '../models/types/dailyNote.types'
 import { isNotionTask, type NotionTask, type TaskData } from '../models/types/task.types'
+import type { TodayTask } from '../models/types/analysis.types'
 import { BlockFetchError, NotionAPIError } from '../utils/errors'
 import type { NotionClient } from '../clients/notionClient'
 
@@ -86,4 +87,47 @@ export const processDailyNotes = async (databaseId: string, client: NotionClient
       return buildDailyNoteData(note, blocks)
     })
   )
+}
+
+export const fetchDoTodayTasksPageId = async (databaseId: string, client: NotionClient): Promise<string | null> => {
+  try {
+    const response = await client.inner.dataSources.query({
+      data_source_id: databaseId,
+      filter: {
+        property: 'Status',
+        select: { equals: 'DoToday' },
+      },
+    })
+    const tasks = (response.results as unknown[]).filter(isNotionTask)
+    return tasks.length > 0 ? tasks[0].id : null
+  } catch (error) {
+    throw new NotionAPIError('Failed to fetch DoToday tasks', error)
+  }
+}
+
+export const appendTodayTasksToPage = async (
+  pageId: string,
+  todayTasks: TodayTask[],
+  client: NotionClient
+): Promise<void> => {
+  if (todayTasks.length === 0) return
+
+  const children = todayTasks.map((task) => {
+    const content = task.deadline ? `${task.name} (期限: ${task.deadline})` : task.name
+    return {
+      type: 'numbered_list_item' as const,
+      numbered_list_item: {
+        rich_text: [{ type: 'text' as const, text: { content } }],
+      },
+    }
+  })
+
+  try {
+    await (client.inner.blocks.children as { append: (args: unknown) => Promise<unknown> }).append({
+      block_id: pageId,
+      children,
+    })
+  } catch (error) {
+    throw new NotionAPIError('Failed to append today tasks to page', error)
+  }
 }

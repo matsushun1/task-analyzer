@@ -2,6 +2,7 @@ import { isClaudeAnalysisResult } from '../../../../src/models/types/analysis.ty
 
 describe('isClaudeAnalysisResult', () => {
   const validResult = {
+    firstTask: { name: 'タスクA', firstStep: 'ファイルを開く' },
     todayTasks: [{ name: 'タスクA', deadline: '3/15', reason: '期限が近い' }],
     overdueTasks: [{ name: 'タスクB', deadline: '3/1' }],
     healthAdvice: '体調が良好です',

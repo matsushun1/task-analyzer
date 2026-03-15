@@ -34,6 +34,12 @@ describe('generateDailyReportUseCase（統合テスト）', () => {
     console.log('=== Claude 分析結果 ===')
     console.log(JSON.stringify(result, null, 2))
 
+    // firstTask
+    expect(typeof result.firstTask.name).toBe('string')
+    expect(result.firstTask.name.length).toBeGreaterThan(0)
+    expect(typeof result.firstTask.firstStep).toBe('string')
+    expect(result.firstTask.firstStep.length).toBeGreaterThan(0)
+
     // todayTasks
     expect(Array.isArray(result.todayTasks)).toBe(true)
     for (const task of result.todayTasks) {

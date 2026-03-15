@@ -1,5 +1,5 @@
 import type { Client } from '@notionhq/client'
-import type { BlockObjectResponse } from '@notionhq/client/build/src/api-endpoints'
+import type { AppendBlockChildrenParameters, BlockObjectResponse } from '@notionhq/client/build/src/api-endpoints'
 import { buildDailyNoteData } from '../models/dailyNote.model'
 import { buildTaskData } from '../models/task.model'
 import type { BlockWithChildren } from '../models/types/block.types'
@@ -112,7 +112,7 @@ export const appendTodayTasksToPage = async (
 ): Promise<void> => {
   if (todayTasks.length === 0) return
 
-  const children = todayTasks.map((task) => {
+  const children: AppendBlockChildrenParameters['children'] = todayTasks.map((task) => {
     const content = task.deadline ? `${task.name} (期限: ${task.deadline})` : task.name
     return {
       type: 'numbered_list_item' as const,
@@ -123,7 +123,7 @@ export const appendTodayTasksToPage = async (
   })
 
   try {
-    await (client.inner.blocks.children as { append: (args: unknown) => Promise<unknown> }).append({
+    await client.inner.blocks.children.append({
       block_id: pageId,
       children,
     })

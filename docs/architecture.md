@@ -57,39 +57,43 @@ sequenceDiagram
     actor User
     participant Notion
     participant Make.com
-    participant CloudRun
+    participant Controller
+    participant UseCase
     participant NotionAPI
     participant ClaudeAPI
 
     User->>Notion: 1. レポート生成ボタン押下
     Notion->>Make.com: 2. Webhook送信 (Automation)
 
-    Make.com->>CloudRun: 3. POST /analyze
-    Note over CloudRun: 非同期処理開始
-    CloudRun-->>Make.com: 4. 202 Accepted
+    Make.com->>Controller: 3. POST /generate-daily-report
+    Note over Controller: 認証チェック (authService)
+    Controller-->>Make.com: 4. 202 Accepted
 
-    CloudRun->>NotionAPI: 5. タスクDB取得 (Status="Doing")
-    NotionAPI-->>CloudRun: タスクリスト
+    Note over Controller: 非同期処理開始
+    Controller->>UseCase: 5. execute()
 
-    CloudRun->>NotionAPI: 6. デイリーノートDB取得 (直近14日)
-    NotionAPI-->>CloudRun: デイリーノート
+    UseCase->>NotionAPI: 6. タスクDB取得 (Status="Doing")
+    NotionAPI-->>UseCase: タスクリスト
+
+    UseCase->>NotionAPI: 7. デイリーノートDB取得 (直近14日)
+    NotionAPI-->>UseCase: デイリーノート
 
     loop 各タスクページ
-        CloudRun->>NotionAPI: 7. ページブロック取得
-        NotionAPI-->>CloudRun: ブロック内容 (期限、詳細)
+        UseCase->>NotionAPI: 8. ページブロック取得
+        NotionAPI-->>UseCase: ブロック内容 (期限、詳細)
     end
 
     loop 各デイリーノート
-        CloudRun->>NotionAPI: 8. ページブロック取得
-        NotionAPI-->>CloudRun: セクション別内容
+        UseCase->>NotionAPI: 9. ページブロック取得
+        NotionAPI-->>UseCase: セクション別内容
     end
 
-    CloudRun->>ClaudeAPI: 9. 分析リクエスト
-    Note over ClaudeAPI: ・優先順位付け<br/>・期限切れ抽出<br/>・体調アドバイス<br/>・タスク管理アドバイス
-    ClaudeAPI-->>CloudRun: 10. 分析結果
+    UseCase->>ClaudeAPI: 10. 分析リクエスト
+    Note over ClaudeAPI: ・優先順位付け<br/>・期限切れ抽出<br/>・体調アドバイス<br/>・タスク管理アドバイス（合計工数含む）
+    ClaudeAPI-->>UseCase: 11. 分析結果
 
-    CloudRun->>NotionAPI: 11. レポートページ作成
-    NotionAPI-->>CloudRun: 作成完了
+    UseCase->>NotionAPI: 12. レポートページ作成 (appendReportToPage)
+    NotionAPI-->>UseCase: 作成完了
 ```
 
 ### 2.2 データフロー

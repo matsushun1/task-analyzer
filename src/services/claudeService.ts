@@ -5,6 +5,7 @@ import type { DailyNoteData } from '../models/types/dailyNote.types'
 import { ClaudeAPIError } from '../utils/errors'
 import { logger } from '../utils/logger'
 import type { ClaudeClient } from '../clients/claudeClient'
+import { extractTotalWorkload } from '../models/parsers/workloadParser'
 
 // SYSTEM_PROMPT: Claudeの振る舞い・スタイル・ロール定義
 // buildPrompt: 出力フォーマット・データ固有の分析条件
@@ -42,13 +43,16 @@ ${subTaskLines || '    (なし)'}`
     .join('\n\n')
 
   const noteSection = notes
-    .map(
-      (note) => `### ${note.date}
+    .map((note) => {
+      const workload = extractTotalWorkload(note.todayTasks)
+      const workloadText = workload > 0 ? `${workload}H` : '記録なし'
+      return `### ${note.date}
 今日行ったこと: ${note.todayTasks.join(', ') || 'なし'}
+今日の合計工数: ${workloadText}
 翌営業日に行うこと: ${note.nextTasks.join(', ') || 'なし'}
 課題・懸念事項: ${note.issues.join(', ') || 'なし'}
 健康状態: ${note.healthStatus || 'なし'}`
-    )
+    })
     .join('\n\n')
 
   return `今日の日付: ${today}

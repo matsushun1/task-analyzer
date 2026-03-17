@@ -16,4 +16,4 @@ COPY --from=builder /app/dist ./dist
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 EXPOSE 8080
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]

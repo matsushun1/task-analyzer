@@ -41,6 +41,13 @@ export const getCryptoConfig = (): CryptoConfig => ({
   iterations: requireEnvInt('CRYPTO_ITERATIONS'),
 })
 
+export const getPort = (): number => {
+  const raw = process.env['PORT'] ?? '8080'
+  const port = parseInt(raw, 10)
+  if (isNaN(port)) throw new Error(`Invalid PORT: ${raw}`)
+  return port
+}
+
 export const getEnvironment = (): Environment => ({
   secretToken: requireEnv('SECRET_TOKEN'),
   masterPassword: requireEnv('MASTER_PW'),

@@ -1,0 +1,71 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}
+  SERVICE_NAME: ${{ secrets.CLOUD_RUN_SERVICE_NAME }}
+  IMAGE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.ARTIFACT_REGISTRY_REPO }}/task-analyzer
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --tag ${{ env.IMAGE }}:${{ github.sha }} \
+            --tag ${{ env.IMAGE }}:latest \
+            .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.IMAGE }}:${{ github.sha }}
+          docker push ${{ env.IMAGE }}:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image ${{ env.IMAGE }}:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --no-allow-unauthenticated \
+            --set-env-vars="\
+          SECRET_TOKEN=${{ secrets.SECRET_TOKEN }},\
+          MASTER_PW=${{ secrets.MASTER_PW }},\
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }},\
+          NOTION_TOKEN=${{ secrets.NOTION_TOKEN }},\
+          NOTION_TASK_DB_ID=${{ secrets.NOTION_TASK_DB_ID }},\
+          NOTION_DAILY_NOTE_DB_ID=${{ secrets.NOTION_DAILY_NOTE_DB_ID }},\
+          CRYPTO_ALGORITHM=${{ secrets.CRYPTO_ALGORITHM }},\
+          CRYPTO_IV_LENGTH=${{ secrets.CRYPTO_IV_LENGTH }},\
+          CRYPTO_SALT_LENGTH=${{ secrets.CRYPTO_SALT_LENGTH }},\
+          CRYPTO_TAG_LENGTH=${{ secrets.CRYPTO_TAG_LENGTH }},\
+          CRYPTO_KEY_LENGTH=${{ secrets.CRYPTO_KEY_LENGTH }},\
+          CRYPTO_ITERATIONS=${{ secrets.CRYPTO_ITERATIONS }}" \
+            --quiet

@@ -19,9 +19,17 @@ export const logger = {
         : error !== undefined
           ? `: ${String(error)}`
           : ''
+    const getOriginalError = (e: unknown): unknown =>
+      e instanceof Error && 'originalError' in e ? (e as { originalError: unknown }).originalError : undefined
+
+    const originalError = getOriginalError(error)
+    const causeDetail =
+      originalError instanceof Error && 'cause' in originalError && originalError.cause !== undefined
+        ? ` [cause: ${String(originalError.cause)}]`
+        : ''
     const originalDetail =
-      error instanceof Error && 'originalError' in error && error.originalError !== undefined
-        ? ` (caused by: ${error.originalError instanceof Error ? error.originalError.message : String(error.originalError)})`
+      originalError !== undefined
+        ? ` (caused by: ${originalError instanceof Error ? originalError.message : String(originalError)}${causeDetail})`
         : ''
     console.error(formatMessage('ERROR', `${message}${errorDetail}${originalDetail}`))
   },

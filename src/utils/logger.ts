@@ -19,6 +19,10 @@ export const logger = {
         : error !== undefined
           ? `: ${String(error)}`
           : ''
-    console.error(formatMessage('ERROR', `${message}${errorDetail}`))
+    const originalDetail =
+      error instanceof Error && 'originalError' in error && error.originalError !== undefined
+        ? ` (caused by: ${error.originalError instanceof Error ? error.originalError.message : String(error.originalError)})`
+        : ''
+    console.error(formatMessage('ERROR', `${message}${errorDetail}${originalDetail}`))
   },
 }

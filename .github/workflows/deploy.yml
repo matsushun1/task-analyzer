@@ -54,7 +54,9 @@ jobs:
             --image ${{ env.IMAGE }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --platform managed \
-            --no-allow-unauthenticated \
+            --allow-unauthenticated \
+            --min-instances=0 \
+            --max-instances=1 \
             --set-env-vars="\
           SECRET_TOKEN=${{ secrets.SECRET_TOKEN }},\
           MASTER_PW=${{ secrets.MASTER_PW }},\

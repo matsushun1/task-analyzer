@@ -17,16 +17,34 @@ const isBlockObjectResponse = (block: unknown): block is BlockObjectResponse =>
   typeof block === 'object' && block !== null && 'type' in block
 
 
+const queryDatabase = async (
+  databaseId: string,
+  token: string,
+  filter: Record<string, unknown>
+): Promise<unknown[]> => {
+  const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Notion-Version': '2022-06-28',
+    },
+    body: JSON.stringify({ filter }),
+  })
+  if (!response.ok) {
+    throw new Error(`Notion API error: ${response.status} ${await response.text()}`)
+  }
+  const data = (await response.json()) as { results: unknown[] }
+  return data.results
+}
+
 export const fetchTasks = async (databaseId: string, client: NotionClient): Promise<NotionTask[]> => {
   try {
-    const response = await client.inner.dataSources.query({
-      data_source_id: databaseId,
-      filter: {
-        property: 'Status',
-        select: { equals: 'Doing' },
-      },
+    const results = await queryDatabase(databaseId, client.token, {
+      property: 'Status',
+      select: { equals: 'Doing' },
     })
-    return (response.results as unknown[]).filter(isNotionTask)
+    return results.filter(isNotionTask)
   } catch (error) {
     throw new NotionAPIError('Failed to fetch tasks', error)
   }
@@ -69,11 +87,11 @@ export const fetchDailyNotes = async (databaseId: string, client: NotionClient):
   const dateString = fourteenDaysAgo.toISOString().split('T')[0]
 
   try {
-    const response = await client.inner.dataSources.query({
-      data_source_id: databaseId,
-      filter: { property: '日付', date: { on_or_after: dateString } },
+    const results = await queryDatabase(databaseId, client.token, {
+      property: '日付',
+      date: { on_or_after: dateString },
     })
-    return (response.results as unknown[]).filter(isNotionDailyNote)
+    return results.filter(isNotionDailyNote)
   } catch (error) {
     throw new NotionAPIError('Failed to fetch daily notes', error)
   }
@@ -91,14 +109,11 @@ export const processDailyNotes = async (databaseId: string, client: NotionClient
 
 export const fetchDoTodayTasksPageId = async (databaseId: string, client: NotionClient): Promise<string | null> => {
   try {
-    const response = await client.inner.dataSources.query({
-      data_source_id: databaseId,
-      filter: {
-        property: 'Status',
-        select: { equals: 'DoToday' },
-      },
+    const results = await queryDatabase(databaseId, client.token, {
+      property: 'Status',
+      select: { equals: 'DoToday' },
     })
-    const tasks = (response.results as unknown[]).filter(isNotionTask)
+    const tasks = results.filter(isNotionTask)
     return tasks.length > 0 ? tasks[0].id : null
   } catch (error) {
     throw new NotionAPIError('Failed to fetch DoToday tasks', error)

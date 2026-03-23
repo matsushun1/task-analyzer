@@ -13,15 +13,29 @@ import { NotionAPIError, BlockFetchError } from '../../../utils/errors'
 import type { NotionClient } from '../../../clients/notionClient'
 import type { ClaudeAnalysisResult } from '../../../models/types/analysis.types'
 
-const makeNotionClient = (overrides: Partial<{ query: jest.Mock; listBlockChildren: jest.Mock }>): NotionClient => {
-  const query = overrides.query ?? jest.fn()
+const makeNotionClient = (overrides: Partial<{ listBlockChildren: jest.Mock }>): NotionClient => {
   const listBlockChildren = overrides.listBlockChildren ?? jest.fn()
   return {
+    token: 'test-token',
     inner: {
-      dataSources: { query },
       blocks: { children: { list: listBlockChildren } },
     } as unknown as Client,
   }
+}
+
+const mockFetchSuccess = (results: unknown[]): void => {
+  jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ results }),
+  } as Response)
+}
+
+const mockFetchError = (): void => {
+  jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    ok: false,
+    status: 500,
+    text: async () => 'Internal Server Error',
+  } as Response)
 }
 
 describe('notionService', () => {

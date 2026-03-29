@@ -1,6 +1,5 @@
 import type { Client } from '@notionhq/client'
 import type { AppendBlockChildrenParameters, BlockObjectResponse } from '@notionhq/client/build/src/api-endpoints'
-import pLimit from 'p-limit'
 import { buildDailyNoteData } from '../models/dailyNote.model'
 import { buildTaskData } from '../models/task.model'
 import type { BlockWithChildren } from '../models/types/block.types'
@@ -10,16 +9,12 @@ import type { ClaudeAnalysisResult } from '../models/types/analysis.types'
 import { BlockFetchError, NotionAPIError } from '../utils/errors'
 import type { NotionClient } from '../clients/notionClient'
 
-const NOTION_CONCURRENCY = 3
-
 export type { BlockWithChildren }
 
 const EXCLUDED_BLOCK_TYPES = new Set(['code', 'image', 'video', 'file', 'audio'])
 
 const isBlockObjectResponse = (block: unknown): block is BlockObjectResponse =>
   typeof block === 'object' && block !== null && 'type' in block
-
-
 
 export const fetchTasks = async (databaseId: string, client: NotionClient): Promise<NotionTask[]> => {
   try {
@@ -33,28 +28,23 @@ export const fetchTasks = async (databaseId: string, client: NotionClient): Prom
   }
 }
 
-const fetchChildrenRecursively = async (
-  client: Client,
-  blockId: string,
-  limit: ReturnType<typeof pLimit>
-): Promise<BlockWithChildren[]> => {
+const fetchChildrenRecursively = async (client: Client, blockId: string): Promise<BlockWithChildren[]> => {
   const response = await client.blocks.children.list({ block_id: blockId })
-  const blocks = response.results.filter(isBlockObjectResponse).filter((block) => !EXCLUDED_BLOCK_TYPES.has(block.type))
+  const blocks = response.results
+    .filter(isBlockObjectResponse)
+    .filter((block) => !EXCLUDED_BLOCK_TYPES.has(block.type))
 
-  return Promise.all(
-    blocks.map((block) =>
-      limit(async () => {
-        const children = block.has_children ? await fetchChildrenRecursively(client, block.id, limit) : []
-        return { ...block, children }
-      })
-    )
-  )
+  const result: BlockWithChildren[] = []
+  for (const block of blocks) {
+    const children = block.has_children ? await fetchChildrenRecursively(client, block.id) : []
+    result.push({ ...block, children })
+  }
+  return result
 }
 
 export const fetchBlockChildren = async (pageId: string, client: NotionClient): Promise<BlockWithChildren[]> => {
-  const limit = pLimit(NOTION_CONCURRENCY)
   try {
-    return await fetchChildrenRecursively(client.inner, pageId, limit)
+    return await fetchChildrenRecursively(client.inner, pageId)
   } catch (error) {
     throw new BlockFetchError(pageId, error)
   }
@@ -62,15 +52,12 @@ export const fetchBlockChildren = async (pageId: string, client: NotionClient): 
 
 export const processReport = async (taskDatabaseId: string, client: NotionClient): Promise<TaskData[]> => {
   const tasks = await fetchTasks(taskDatabaseId, client)
-  const limit = pLimit(NOTION_CONCURRENCY)
-  return Promise.all(
-    tasks.map((task) =>
-      limit(async () => {
-        const blocks = await fetchBlockChildren(task.id, client)
-        return buildTaskData(task, blocks)
-      })
-    )
-  )
+  const result: TaskData[] = []
+  for (const task of tasks) {
+    const blocks = await fetchBlockChildren(task.id, client)
+    result.push(buildTaskData(task, blocks))
+  }
+  return result
 }
 
 export const fetchDailyNotes = async (databaseId: string, client: NotionClient): Promise<NotionDailyNote[]> => {
@@ -92,15 +79,12 @@ export const fetchDailyNotes = async (databaseId: string, client: NotionClient):
 
 export const processDailyNotes = async (databaseId: string, client: NotionClient): Promise<DailyNoteData[]> => {
   const notes = await fetchDailyNotes(databaseId, client)
-  const limit = pLimit(NOTION_CONCURRENCY)
-  return Promise.all(
-    notes.map((note) =>
-      limit(async () => {
-        const blocks = await fetchBlockChildren(note.id, client)
-        return buildDailyNoteData(note, blocks)
-      })
-    )
-  )
+  const result: DailyNoteData[] = []
+  for (const note of notes) {
+    const blocks = await fetchBlockChildren(note.id, client)
+    result.push(buildDailyNoteData(note, blocks))
+  }
+  return result
 }
 
 export const fetchDoTodayTasksPageId = async (databaseId: string, client: NotionClient): Promise<string | null> => {

@@ -1,5 +1,6 @@
 import type { Client } from '@notionhq/client'
 import type { AppendBlockChildrenParameters, BlockObjectResponse } from '@notionhq/client/build/src/api-endpoints'
+import pLimit from 'p-limit'
 import { buildDailyNoteData } from '../models/dailyNote.model'
 import { buildTaskData } from '../models/task.model'
 import type { BlockWithChildren } from '../models/types/block.types'
@@ -8,6 +9,8 @@ import { isNotionTask, type NotionTask, type TaskData } from '../models/types/ta
 import type { ClaudeAnalysisResult } from '../models/types/analysis.types'
 import { BlockFetchError, NotionAPIError } from '../utils/errors'
 import type { NotionClient } from '../clients/notionClient'
+
+const NOTION_CONCURRENCY = 3
 
 export type { BlockWithChildren }
 
@@ -30,21 +33,28 @@ export const fetchTasks = async (databaseId: string, client: NotionClient): Prom
   }
 }
 
-const fetchChildrenRecursively = async (client: Client, blockId: string): Promise<BlockWithChildren[]> => {
+const fetchChildrenRecursively = async (
+  client: Client,
+  blockId: string,
+  limit: ReturnType<typeof pLimit>
+): Promise<BlockWithChildren[]> => {
   const response = await client.blocks.children.list({ block_id: blockId })
   const blocks = response.results.filter(isBlockObjectResponse).filter((block) => !EXCLUDED_BLOCK_TYPES.has(block.type))
 
   return Promise.all(
-    blocks.map(async (block) => {
-      const children = block.has_children ? await fetchChildrenRecursively(client, block.id) : []
-      return { ...block, children }
-    })
+    blocks.map((block) =>
+      limit(async () => {
+        const children = block.has_children ? await fetchChildrenRecursively(client, block.id, limit) : []
+        return { ...block, children }
+      })
+    )
   )
 }
 
 export const fetchBlockChildren = async (pageId: string, client: NotionClient): Promise<BlockWithChildren[]> => {
+  const limit = pLimit(NOTION_CONCURRENCY)
   try {
-    return await fetchChildrenRecursively(client.inner, pageId)
+    return await fetchChildrenRecursively(client.inner, pageId, limit)
   } catch (error) {
     throw new BlockFetchError(pageId, error)
   }
@@ -52,11 +62,14 @@ export const fetchBlockChildren = async (pageId: string, client: NotionClient): 
 
 export const processReport = async (taskDatabaseId: string, client: NotionClient): Promise<TaskData[]> => {
   const tasks = await fetchTasks(taskDatabaseId, client)
+  const limit = pLimit(NOTION_CONCURRENCY)
   return Promise.all(
-    tasks.map(async (task) => {
-      const blocks = await fetchBlockChildren(task.id, client)
-      return buildTaskData(task, blocks)
-    })
+    tasks.map((task) =>
+      limit(async () => {
+        const blocks = await fetchBlockChildren(task.id, client)
+        return buildTaskData(task, blocks)
+      })
+    )
   )
 }
 
@@ -79,11 +92,14 @@ export const fetchDailyNotes = async (databaseId: string, client: NotionClient):
 
 export const processDailyNotes = async (databaseId: string, client: NotionClient): Promise<DailyNoteData[]> => {
   const notes = await fetchDailyNotes(databaseId, client)
+  const limit = pLimit(NOTION_CONCURRENCY)
   return Promise.all(
-    notes.map(async (note) => {
-      const blocks = await fetchBlockChildren(note.id, client)
-      return buildDailyNoteData(note, blocks)
-    })
+    notes.map((note) =>
+      limit(async () => {
+        const blocks = await fetchBlockChildren(note.id, client)
+        return buildDailyNoteData(note, blocks)
+      })
+    )
   )
 }
 

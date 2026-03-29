@@ -13,45 +13,29 @@ import { NotionAPIError, BlockFetchError } from '../../../utils/errors'
 import type { NotionClient } from '../../../clients/notionClient'
 import type { ClaudeAnalysisResult } from '../../../models/types/analysis.types'
 
-const makeNotionClient = (overrides: Partial<{ listBlockChildren: jest.Mock }>): NotionClient => {
+const makeNotionClient = (overrides: Partial<{ queryDatabase: jest.Mock; listBlockChildren: jest.Mock }>): NotionClient => {
+  const queryDatabase = overrides.queryDatabase ?? jest.fn().mockResolvedValue([])
   const listBlockChildren = overrides.listBlockChildren ?? jest.fn()
   return {
     token: 'test-token',
+    queryDatabase,
     inner: {
       blocks: { children: { list: listBlockChildren } },
     } as unknown as Client,
-  }
-}
-
-const mockFetchSuccess = (results: unknown[]): void => {
-  jest.spyOn(global, 'fetch').mockResolvedValueOnce({
-    ok: true,
-    json: async () => ({ results }),
-  } as Response)
-}
-
-const mockFetchError = (): void => {
-  jest.spyOn(global, 'fetch').mockResolvedValueOnce({
-    ok: false,
-    status: 500,
-    text: async () => 'Internal Server Error',
-  } as Response)
+  } as unknown as NotionClient
 }
 
 describe('notionService', () => {
   describe('fetchTasks', () => {
     it('Status=Doingのフィルタでデータベースをクエリする', async () => {
-      const mockQuery = jest.fn().mockResolvedValue({ results: [] })
-      const client = makeNotionClient({ query: mockQuery })
+      const mockQueryDatabase = jest.fn().mockResolvedValue([])
+      const client = makeNotionClient({ queryDatabase: mockQueryDatabase })
 
       await fetchTasks('database-id-123', client)
 
-      expect(mockQuery).toHaveBeenCalledWith({
-        data_source_id: 'database-id-123',
-        filter: {
-          property: 'Status',
-          select: { equals: 'Doing' },
-        },
+      expect(mockQueryDatabase).toHaveBeenCalledWith('database-id-123', {
+        property: 'Status',
+        select: { equals: 'Doing' },
       })
     })
 
@@ -64,7 +48,7 @@ describe('notionService', () => {
           'Date Created': { created_time: '2026-03-08T00:00:00.000Z' },
         },
       }
-      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [notionTask] }) })
+      const client = makeNotionClient({ queryDatabase: jest.fn().mockResolvedValue([notionTask]) })
 
       const result = await fetchTasks('database-id-123', client)
 
@@ -73,7 +57,7 @@ describe('notionService', () => {
     })
 
     it('タスクが0件のときは空配列を返す', async () => {
-      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [] }) })
+      const client = makeNotionClient({ queryDatabase: jest.fn().mockResolvedValue([]) })
 
       const result = await fetchTasks('database-id-123', client)
 
@@ -81,7 +65,7 @@ describe('notionService', () => {
     })
 
     it('Notion APIがエラーを返したとき NotionAPIError をthrowする', async () => {
-      const client = makeNotionClient({ query: jest.fn().mockRejectedValue(new Error('Notion API error')) })
+      const client = makeNotionClient({ queryDatabase: jest.fn().mockRejectedValue(new Error('Notion API error')) })
 
       await expect(fetchTasks('database-id-123', client)).rejects.toThrow(NotionAPIError)
     })
@@ -221,14 +205,14 @@ describe('notionService', () => {
 
   describe('processReport', () => {
     it('fetchTasksをtaskDatabaseIdとclientで呼ぶ', async () => {
-      const mockQuery = jest.fn().mockResolvedValue({ results: [] })
-      const client = makeNotionClient({ query: mockQuery })
+      const mockQueryDatabase = jest.fn().mockResolvedValue([])
+      const client = makeNotionClient({ queryDatabase: mockQueryDatabase })
 
       await processReport('task-db-id', client)
 
-      expect(mockQuery).toHaveBeenCalledWith({
-        data_source_id: 'task-db-id',
-        filter: { property: 'Status', select: { equals: 'Doing' } },
+      expect(mockQueryDatabase).toHaveBeenCalledWith('task-db-id', {
+        property: 'Status',
+        select: { equals: 'Doing' },
       })
     })
 
@@ -251,9 +235,9 @@ describe('notionService', () => {
           },
         },
       ]
-      const mockQuery = jest.fn().mockResolvedValue({ results: tasks })
+      const mockQueryDatabase = jest.fn().mockResolvedValue(tasks)
       const mockList = jest.fn().mockResolvedValue({ results: [] })
-      const client = makeNotionClient({ query: mockQuery, listBlockChildren: mockList })
+      const client = makeNotionClient({ queryDatabase: mockQueryDatabase, listBlockChildren: mockList })
 
       await processReport('task-db-id', client)
 
@@ -271,7 +255,7 @@ describe('notionService', () => {
         },
       }
       const client = makeNotionClient({
-        query: jest.fn().mockResolvedValue({ results: [task] }),
+        queryDatabase: jest.fn().mockResolvedValue([task]),
         listBlockChildren: jest.fn().mockResolvedValue({ results: [] }),
       })
 
@@ -287,7 +271,7 @@ describe('notionService', () => {
     })
 
     it('タスクが0件のとき空配列を返す', async () => {
-      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [] }) })
+      const client = makeNotionClient({ queryDatabase: jest.fn().mockResolvedValue([]) })
 
       const result = await processReport('task-db-id', client)
 
@@ -295,7 +279,7 @@ describe('notionService', () => {
     })
 
     it('fetchTasksが失敗したときエラーをthrowする', async () => {
-      const client = makeNotionClient({ query: jest.fn().mockRejectedValue(new Error('Notion API error')) })
+      const client = makeNotionClient({ queryDatabase: jest.fn().mockRejectedValue(new Error('Notion API error')) })
 
       await expect(processReport('task-db-id', client)).rejects.toThrow(NotionAPIError)
     })
@@ -309,17 +293,14 @@ describe('notionService', () => {
     it('日付プロパティのフィルタでデータベースをクエリする', async () => {
       jest.useFakeTimers()
       jest.setSystemTime(new Date('2026-03-11T00:00:00.000Z'))
-      const mockQuery = jest.fn().mockResolvedValue({ results: [] })
-      const client = makeNotionClient({ query: mockQuery })
+      const mockQueryDatabase = jest.fn().mockResolvedValue([])
+      const client = makeNotionClient({ queryDatabase: mockQueryDatabase })
 
       await fetchDailyNotes('daily-db-id', client)
 
-      expect(mockQuery).toHaveBeenCalledWith({
-        data_source_id: 'daily-db-id',
-        filter: {
-          property: '日付',
-          date: { on_or_after: '2026-02-25' },
-        },
+      expect(mockQueryDatabase).toHaveBeenCalledWith('daily-db-id', {
+        property: '日付',
+        date: { on_or_after: '2026-02-25' },
       })
     })
 
@@ -329,7 +310,7 @@ describe('notionService', () => {
         properties: { 日付: { date: { start: '2026-03-10' } } },
       }
       const invalidNote = { id: 'note-2', properties: {} }
-      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [validNote, invalidNote] }) })
+      const client = makeNotionClient({ queryDatabase: jest.fn().mockResolvedValue([validNote, invalidNote]) })
 
       const result = await fetchDailyNotes('daily-db-id', client)
 
@@ -338,7 +319,7 @@ describe('notionService', () => {
     })
 
     it('ノートが0件のとき空配列を返す', async () => {
-      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [] }) })
+      const client = makeNotionClient({ queryDatabase: jest.fn().mockResolvedValue([]) })
 
       const result = await fetchDailyNotes('daily-db-id', client)
 
@@ -346,7 +327,7 @@ describe('notionService', () => {
     })
 
     it('Notion APIがエラーを返したとき NotionAPIError をthrowする', async () => {
-      const client = makeNotionClient({ query: jest.fn().mockRejectedValue(new Error('Notion API error')) })
+      const client = makeNotionClient({ queryDatabase: jest.fn().mockRejectedValue(new Error('Notion API error')) })
 
       await expect(fetchDailyNotes('daily-db-id', client)).rejects.toThrow(NotionAPIError)
     })
@@ -358,9 +339,9 @@ describe('notionService', () => {
         id: 'note-1',
         properties: { 日付: { date: { start: '2026-03-10' } } },
       }
-      const mockQuery = jest.fn().mockResolvedValue({ results: [note] })
+      const mockQueryDatabase = jest.fn().mockResolvedValue([note])
       const mockList = jest.fn().mockResolvedValue({ results: [] })
-      const client = makeNotionClient({ query: mockQuery, listBlockChildren: mockList })
+      const client = makeNotionClient({ queryDatabase: mockQueryDatabase, listBlockChildren: mockList })
 
       await processDailyNotes('daily-db-id', client)
 
@@ -373,7 +354,7 @@ describe('notionService', () => {
         properties: { 日付: { date: { start: '2026-03-10' } } },
       }
       const client = makeNotionClient({
-        query: jest.fn().mockResolvedValue({ results: [note] }),
+        queryDatabase: jest.fn().mockResolvedValue([note]),
         listBlockChildren: jest.fn().mockResolvedValue({ results: [] }),
       })
 
@@ -390,7 +371,7 @@ describe('notionService', () => {
     })
 
     it('ノートが0件のとき空配列を返す', async () => {
-      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [] }) })
+      const client = makeNotionClient({ queryDatabase: jest.fn().mockResolvedValue([]) })
 
       const result = await processDailyNotes('daily-db-id', client)
 
@@ -398,7 +379,7 @@ describe('notionService', () => {
     })
 
     it('fetchDailyNotes が失敗したときエラーをthrowする', async () => {
-      const client = makeNotionClient({ query: jest.fn().mockRejectedValue(new Error('Notion API error')) })
+      const client = makeNotionClient({ queryDatabase: jest.fn().mockRejectedValue(new Error('Notion API error')) })
 
       await expect(processDailyNotes('daily-db-id', client)).rejects.toThrow(NotionAPIError)
     })
@@ -406,17 +387,14 @@ describe('notionService', () => {
 
   describe('fetchDoTodayTasksPageId', () => {
     it('Status=DoTodayのフィルタでデータベースをクエリする', async () => {
-      const mockQuery = jest.fn().mockResolvedValue({ results: [] })
-      const client = makeNotionClient({ query: mockQuery })
+      const mockQueryDatabase = jest.fn().mockResolvedValue([])
+      const client = makeNotionClient({ queryDatabase: mockQueryDatabase })
 
       await fetchDoTodayTasksPageId('database-id-123', client)
 
-      expect(mockQuery).toHaveBeenCalledWith({
-        data_source_id: 'database-id-123',
-        filter: {
-          property: 'Status',
-          select: { equals: 'DoToday' },
-        },
+      expect(mockQueryDatabase).toHaveBeenCalledWith('database-id-123', {
+        property: 'Status',
+        select: { equals: 'DoToday' },
       })
     })
 
@@ -429,7 +407,7 @@ describe('notionService', () => {
           'Date Created': { created_time: '2026-03-15T00:00:00.000Z' },
         },
       }
-      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [task] }) })
+      const client = makeNotionClient({ queryDatabase: jest.fn().mockResolvedValue([task]) })
 
       const result = await fetchDoTodayTasksPageId('database-id-123', client)
 
@@ -437,7 +415,7 @@ describe('notionService', () => {
     })
 
     it('DoTodayページが存在しないとき null を返す', async () => {
-      const client = makeNotionClient({ query: jest.fn().mockResolvedValue({ results: [] }) })
+      const client = makeNotionClient({ queryDatabase: jest.fn().mockResolvedValue([]) })
 
       const result = await fetchDoTodayTasksPageId('database-id-123', client)
 
@@ -445,7 +423,7 @@ describe('notionService', () => {
     })
 
     it('Notion APIがエラーを返したとき NotionAPIError をthrowする', async () => {
-      const client = makeNotionClient({ query: jest.fn().mockRejectedValue(new Error('Notion API error')) })
+      const client = makeNotionClient({ queryDatabase: jest.fn().mockRejectedValue(new Error('Notion API error')) })
 
       await expect(fetchDoTodayTasksPageId('database-id-123', client)).rejects.toThrow(NotionAPIError)
     })
@@ -453,8 +431,9 @@ describe('notionService', () => {
 
   describe('appendReportToPage', () => {
     const makeClientWithAppend = (appendMock: jest.Mock): NotionClient => ({
+      token: 'test-token',
+      queryDatabase: jest.fn(),
       inner: {
-        dataSources: { query: jest.fn() },
         blocks: {
           children: {
             list: jest.fn(),
@@ -462,7 +441,7 @@ describe('notionService', () => {
           },
         },
       } as unknown as Client,
-    })
+    } as unknown as NotionClient)
 
     const baseResult: ClaudeAnalysisResult = {
       firstTask: { name: 'タスクA', firstStep: '最初のステップ' },

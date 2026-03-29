@@ -17,30 +17,10 @@ const isBlockObjectResponse = (block: unknown): block is BlockObjectResponse =>
   typeof block === 'object' && block !== null && 'type' in block
 
 
-const queryDatabase = async (
-  databaseId: string,
-  token: string,
-  filter: Record<string, unknown>
-): Promise<unknown[]> => {
-  const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'Notion-Version': '2022-06-28',
-    },
-    body: JSON.stringify({ filter }),
-  })
-  if (!response.ok) {
-    throw new Error(`Notion API error: ${response.status} ${await response.text()}`)
-  }
-  const data = (await response.json()) as { results: unknown[] }
-  return data.results
-}
 
 export const fetchTasks = async (databaseId: string, client: NotionClient): Promise<NotionTask[]> => {
   try {
-    const results = await queryDatabase(databaseId, client.token, {
+    const results = await client.queryDatabase(databaseId, {
       property: 'Status',
       select: { equals: 'Doing' },
     })
@@ -87,7 +67,7 @@ export const fetchDailyNotes = async (databaseId: string, client: NotionClient):
   const dateString = fourteenDaysAgo.toISOString().split('T')[0]
 
   try {
-    const results = await queryDatabase(databaseId, client.token, {
+    const results = await client.queryDatabase(databaseId, {
       property: '日付',
       date: { on_or_after: dateString },
     })
@@ -109,7 +89,7 @@ export const processDailyNotes = async (databaseId: string, client: NotionClient
 
 export const fetchDoTodayTasksPageId = async (databaseId: string, client: NotionClient): Promise<string | null> => {
   try {
-    const results = await queryDatabase(databaseId, client.token, {
+    const results = await client.queryDatabase(databaseId, {
       property: 'Status',
       select: { equals: 'DoToday' },
     })
